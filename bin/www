@@ -3,7 +3,7 @@
 /**
  * Module dependencies.
  */
-
+require('module-alias/register');
 var app = require('../app');
 var debug = require('debug')('myapp:server');
 var http = require('http');

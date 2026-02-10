@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Error</title>
+</head>
+<body>
+  <h1>에러 발생</h1>
+  <p>에러 코드: {{ status }}</p>
+  <p>메시지: {{ message }}</p>
+  <p>요청된 리소스: {{ url }}</p>
+
+  {% if stack %}
+    <h2>개발용 디버깅 정보</h2>
+    <pre>{{ stack }}</pre>
+  {% endif %}
+</body>
+</html>
