@@ -279,3 +279,6 @@ td.col-hover, th.col-hover {
 .cell-red    { background:#FFCDD2; }
 .cell-gray   { background:#ECEFF1; }
 .cell-green  { background:#C8E6C9; }
+
+/* 하단으로 이동한 Type 미리보기와 위 표 사이 여백 보강(선택) */
+.type-preview { margin-top: 8px; }

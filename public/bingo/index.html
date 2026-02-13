@@ -15,43 +15,22 @@
     <input type="hidden" value="" id="currentSeq">
   </header>
 
-  <!-- ================= 상단: 좌(실데이터+라디오)/우(Type 미리보기) ================= -->
-  <section id="topSplit" class="split" aria-label="상단 실데이터 + 타입 미리보기">
+  <!-- ================= 상단: 좌(실데이터+라디오)/우(예상 노출 세트) ================= -->
+  <section id="topSplit" class="split" aria-label="상단 실데이터 + 예상 노출 세트">
     <!-- 좌측: 실데이터 영역(라디오로 적용회차 선택) -->
     <section id="dataViewer" class="data-viewer" aria-label="회차 목록(클릭/라디오로 분석)">
       <div class="data-viewer-header">
         <h3>실제 데이터 (최근 60개)</h3>
         <small class="muted">라디오 선택 = 적용회차 지정</small>
       </div>
-      <div id="dataViewerInner"><!-- script.js에서 표 렌더/라디오 바인딩 --></div>
+      <div id="dataViewerInner"><!-- script에서 표 렌더/라디오 바인딩 --></div>
       <!-- 호환성 유지용(숨김): 적용회차 입력 -->
       <input id="applyRound" type="number" hidden />
     </section>
 
-    <!-- 우측: Type 미리보기 영역(확인용) -->
-    <section id="typePreview" class="type-preview" aria-label="유형 미리보기(확인용)">
-      <div class="type-preview-bar">
-        <label>
-          Type 미리보기(확인용)
-          <select id="previewType">
-            <option value="range3" selected>03그룹(연속)</option>
-            <option value="range5">05그룹(연속)</option>
-            <option value="range6">06그룹(연속)</option>
-            <option value="range9">09그룹(연속)</option>
-            <option value="range10">10그룹(연속)</option>
-            <option value="range15">15그룹(연속)</option>
-            <option value="mod3">03나누기</option>
-            <option value="mod9">09나누기</option>
-            <option value="mod15">15나누기</option>
-            <option value="endDigit10">10구간(끝수)</option>
-            <option value="single45">45숫자(개별)</option>
-          </select>
-        </label>
-        <small class="muted">※ 분석/예상 계산은 항상 11개 타입 전부 사용</small>
-      </div>
-      <section id="typePanel" class="type-panel" aria-label="유형별 이격(확인용)">
-        <!-- script.js에서 선택된 미리보기 타입 1종만 카드로 렌더 -->
-      </section>
+    <!-- 우측: (자리바꿈) 예상 노출 세트 -->
+    <section id="exposureSets" class="sets" aria-label="예상 노출 세트 (상단으로 이동)">
+      <!-- bingoscript.js에서 세트 라인 렌더 -->
     </section>
   </section>
 
@@ -74,6 +53,7 @@
       후보 개수(k)
       <input id="candidateCount" type="number" min="6" max="15" value="12" />
     </label>
+
     <label class="control">
       미노출 개수
       <input id="nonExposeCount" type="number" min="6" max="20" value="10" />
@@ -106,7 +86,7 @@
     </div>
 
     <small class="hint">
-      적용 회차는 상단 실데이터 표의 라디오 선택으로 지정됩니다. 모든 계산은 브라우저에서 수행됩니다(서버 없음).
+      적용 회차는 상단 실제데이터 표의 라디오 선택으로 지정됩니다. 모든 계산은 브라우저에서 수행됩니다(서버 없음).
     </small>
 
     <!-- 패턴 필터 (게일 하워드/분산) -->
@@ -144,17 +124,39 @@
     </details>
   </section>
 
-  <!-- ================= 하단: 분석/예상 데이터 ================= -->
+  <!-- ================= 하단: 요약/표 + (자리바꿈) Type 미리보기 ================= -->
   <section class="summary" id="summary" aria-live="polite"></section>
 
   <section id="tablesBlock" aria-label="빈도/적용/후보/미노출">
     <section id="freqCandWrap" class="table-wrap" aria-label="메인 테이블">
-      <div id="table"><!-- script.js에서 하나의 표로 렌더 --></div>
+      <div id="table"><!-- script에서 하나의 표로 렌더 --></div>
     </section>
   </section>
 
-  <section id="exposureSets" class="sets" aria-label="예상 노출 세트">
-    <!-- script.js에서 세트 라인 렌더 -->
+  <!-- (자리바꿈) Type 미리보기: 하단으로 이동 -->
+  <section id="typePreview" class="type-preview" aria-label="유형 미리보기(확인용)">
+    <div class="type-preview-bar">
+      <label>
+        Type 미리보기(확인용)
+        <select id="previewType">
+          <option value="range3" selected>03그룹(연속)</option>
+          <option value="range5">05그룹(연속)</option>
+          <option value="range6">06그룹(연속)</option>
+          <option value="range9">09그룹(연속)</option>
+          <option value="range10">10그룹(연속)</option>
+          <option value="range15">15그룹(연속)</option>
+          <option value="mod3">03나누기</option>
+          <option value="mod9">09나누기</option>
+          <option value="mod15">15나누기</option>
+          <option value="endDigit10">10구간(끝수)</option>
+          <option value="single45">45숫자(개별)</option>
+        </select>
+      </label>
+      <small class="muted">※ 분석/예상 계산은 항상 11개 타입 전부 사용</small>
+    </div>
+    <section id="typePanel" class="type-panel" aria-label="유형별 이격(확인용)">
+      <!-- script에서 선택된 미리보기 타입 1종만 카드로 렌더 -->
+    </section>
   </section>
 
   <!-- 레전드 + 진행/안내 -->
@@ -162,6 +164,7 @@
     <div class="legend-item"><span class="legend-vline"></span> 번호대(5칸) 경계선</div>
     <div class="legend-item"><span class="legend-hover"></span> 열 hover 강조</div>
   </section>
+
   <section id="progress" class="progress" aria-live="polite"></section>
 
   <!-- ================= 푸터 ================= -->
@@ -175,3 +178,4 @@
   </footer>
 </body>
 </html>
+``
