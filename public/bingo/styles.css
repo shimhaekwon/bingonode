@@ -282,3 +282,17 @@ td.col-hover, th.col-hover {
 
 /* 하단으로 이동한 Type 미리보기와 위 표 사이 여백 보강(선택) */
 .type-preview { margin-top: 8px; }
+
+/* 행 구분선(5행 단위) */
+tr.row-sep > td { border-top: 2px solid var(--border); }
+
+/* 행 hover 강조 */
+tr.row-hover > td { background: rgba(255,235,59,.16); }
+
+/* 번호 칩 재사용(이미 .lotto-chip 정의가 있다면 건너뛰기 가능) */
+.lotto-chip { 
+  display:inline-block; padding:2px 8px; border-radius:999px;
+  font-weight:800; font-variant-numeric:tabular-nums;
+  border:1px solid var(--border); box-shadow: var(--shadow);
+  min-width:28px; text-align:center;
+}

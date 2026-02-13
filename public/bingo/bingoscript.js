@@ -980,86 +980,156 @@
       appendLog('Type Rate 패널 렌더 실패 (분석/예상은 계속 진행)', 'warn');
     }
 
-    // === 메인 테이블 렌더: 헤더 → 빈도수 → 적용회차 → 후보군 → 미노출 ===
-    const tableHost = el.table;
-    tableHost.innerHTML = '';
-    let html = '<table>';
+// === 메인 테이블 렌더 (세로 전환: 번호가 행) ===
+const tableHost = el.table;
+tableHost.innerHTML = "";
 
-    // 0) 번호 헤더
-    html += '<tr>';
-    for (let i = 1; i <= 45; i++) {
-      html += `<th>${i}</th>`;
-    }
-    html += '</tr>';
+// 1) 표 제목/요약 라벨 섹션을 위에 간단히 표시(선택)
+let html = '<table>';
 
-    // 1) 빈도수
-    const minK = Math.min(...K.slice(1));
-    const maxK = Math.max(...K.slice(1));
+// 헤더 행: [번호] [빈도수 (최근 W=...)] [적용회차 추출 (선택 회차 r)] [예상 후보군] [예상 미노출]
+html += `
+  <tr>
+    <th style="width:72px;">번호</th>
+    <th title="최근 W회 빈도(보너스 0.5 가점)">빈도수 (최근 W=${W}, 보너스 0.5)</th>
+    <th title="선택 회차의 당첨/보너스 포함 여부">적용회차 추출 (선택 회차 ${r})</th>
+    <th title="예상 후보군 포함 여부">예상 후보군</th>
+    <th title="예상 미노출 포함 여부">예상 미노출</th>
+  </tr>
+`;
 
-    html += `<tr><td colspan="45" class="section-label">빈도수 (최근 W=${W}, 보너스 0.5)</td></tr>`;
-    html += '<tr>';
-    for (let i = 1; i <= 45; i++) {
-      const color = getHeat(minK, maxK, K[i]);
-      const tip   = `번호 ${i}: 최근 ${W}회 빈도 ${K[i]}`;
-      html += `<td style="background:${color};color:#111" title="${tip}">${K[i]}</td>`;
-    }
-    html += '</tr>';
+// 2) 필요한 컨텍스트(적용 회차의 당첨/보너스, 후보/미노출 집합)
+const applyRow = findApplyRow(r);
+let applyNums = [];
+let applyBonus = null;
+if (applyRow && applyRow.length >= 8) {
+  applyNums  = applyRow.slice(1, 7);
+  applyBonus = applyRow[7];
+}
+const nonSet = new Set(nonExpose);
 
-    // 2) 적용회차 추출 (선택 회차 r의 당첨/보너스 그대로 표시)
-    html += `<tr><td colspan="45" class="section-label">적용회차 추출 (선택 회차 ${r})</td></tr>`;
-    html += '<tr>';
-    const applyRow = findApplyRow(r);
-    let applyNums  = [];
-    let applyBonus = null;
+// 3) 빈도수 색상 범례(heatmap)를 위해 min/max
+const minK = Math.min(...K.slice(1));
+const maxK = Math.max(...K.slice(1));
 
-    if (applyRow && applyRow.length >= 8) {
-      applyNums  = applyRow.slice(1, 7);
-      applyBonus = applyRow[7];
-    }
+// 4) 1~45를 “행”으로 렌더
+for (let i = 1; i <= 45; i++) {
+  // (a) 번호 칩/행 제목
+  const numCell = `<td><span class="lotto-chip ${lottoColorClass(i, 'chip')}">${i}</span></td>`;
 
-    for (let i = 1; i <= 45; i++) {
-      let val = 0;
-      let cls = '';
-      let tip = '적용회차에 선택되지 않음';
+  // (b) 빈도수 셀 (heatmap)
+  const freqColor = getHeat(minK, maxK, K[i]);
+  const freqTip   = `번호 ${i}: 최근 ${W}회 빈도 ${K[i]}`;
+  const freqCell  = `<td style="background:${freqColor};color:#111" title="${freqTip}">${K[i]}</td>`;
 
-      if (applyNums.includes(i)) {
-        val = 1;
-        cls = 'highlight-pink';
-        tip = `적용회차 당첨 번호: ${i}`;
-      } else if (applyBonus === i) {
-        val = 1;
-        cls = 'highlight-green';
-        tip = `적용회차 보너스 번호: ${i}`;
-      }
-      html += `<td class="${cls}" title="${tip}">${val}</td>`;
-    }
-    html += '</tr>';
+  // (c) 적용 회차 셀 (당첨/보너스 하이라이트)
+  let applyVal = 0, applyCls = "", applyTip = "적용회차에 선택되지 않음";
+  if (applyNums.includes(i)) {
+    applyVal = 1; applyCls = "highlight-pink";  applyTip = `적용회차 당첨 번호: ${i}`;
+  } else if (applyBonus === i) {
+    applyVal = 1; applyCls = "highlight-green"; applyTip = `적용회차 보너스 번호: ${i}`;
+  }
+  const applyCell = `<td class="${applyCls}" title="${applyTip}">${applyVal}</td>`;
 
-    // 3) 예상 후보군
-    html += `<tr><td colspan="45" class="section-label">예상 후보군</td></tr>`;
-    html += '<tr>';
-    for (let i = 1; i <= 45; i++) {
-      const inSet = cand.has(i);
-      html += `<td class="${inSet ? 'highlight-purple' : ''}">${inSet ? 1 : 0}</td>`;
-    }
-    html += '</tr>';
+  // (d) 후보군 셀
+  const inCand = cand.has(i);
+  const candCell = `<td class="${inCand ? 'highlight-purple' : ''}">${inCand ? 1 : 0}</td>`;
 
-    // 4) 예상 미노출
-    const nonSet = new Set(nonExpose);
-    html += `<tr><td colspan="45" class="section-label">예상 미노출</td></tr>`;
-    html += '<tr>';
-    for (let i = 1; i <= 45; i++) {
-      const isNX = nonSet.has(i);
-      const tip  = `p(${i})=${(P[i] * 100).toFixed(2)}%`;
-      html += `<td class="${isNX ? 'highlight-nonexpose' : ''}" title="${tip}">${isNX ? 1 : 0}</td>`;
-    }
-    html += '</tr>';
+  // (e) 미노출 셀 (p(i) tooltip 유지)
+  const isNX = nonSet.has(i);
+  const pTip = `p(${i})=${(P[i]*100).toFixed(2)}%`;
+  const nonCell = `<td class="${isNX ? 'highlight-nonexpose' : ''}" title="${pTip}">${isNX ? 1 : 0}</td>`;
 
-    html += '</table>';
-    tableHost.innerHTML = html;
+  html += `<tr>${numCell}${freqCell}${applyCell}${candCell}${nonCell}</tr>`;
+}
 
-    applyColumnSeparators(tableHost);
-    enableColumnHoverBand(tableHost);
+html += '</table>';
+tableHost.innerHTML = html;
+
+// (선택) 행 구분선/행 hover 보강
+applyRowSeparators(tableHost);
+enableRowHoverBand(tableHost);    
+
+    // // === 메인 테이블 렌더: 헤더 → 빈도수 → 적용회차 → 후보군 → 미노출 ===
+    // const tableHost = el.table;
+    // tableHost.innerHTML = '';
+    // let html = '<table>';
+
+    // // 0) 번호 헤더
+    // html += '<tr>';
+    // for (let i = 1; i <= 45; i++) {
+    //   html += `<th>${i}</th>`;
+    // }
+    // html += '</tr>';
+
+    // // 1) 빈도수
+    // const minK = Math.min(...K.slice(1));
+    // const maxK = Math.max(...K.slice(1));
+
+    // html += `<tr><td colspan="45" class="section-label">빈도수 (최근 W=${W}, 보너스 0.5)</td></tr>`;
+    // html += '<tr>';
+    // for (let i = 1; i <= 45; i++) {
+    //   const color = getHeat(minK, maxK, K[i]);
+    //   const tip   = `번호 ${i}: 최근 ${W}회 빈도 ${K[i]}`;
+    //   html += `<td style="background:${color};color:#111" title="${tip}">${K[i]}</td>`;
+    // }
+    // html += '</tr>';
+
+    // // 2) 적용회차 추출 (선택 회차 r의 당첨/보너스 그대로 표시)
+    // html += `<tr><td colspan="45" class="section-label">적용회차 추출 (선택 회차 ${r})</td></tr>`;
+    // html += '<tr>';
+    // const applyRow = findApplyRow(r);
+    // let applyNums  = [];
+    // let applyBonus = null;
+
+    // if (applyRow && applyRow.length >= 8) {
+    //   applyNums  = applyRow.slice(1, 7);
+    //   applyBonus = applyRow[7];
+    // }
+
+    // for (let i = 1; i <= 45; i++) {
+    //   let val = 0;
+    //   let cls = '';
+    //   let tip = '적용회차에 선택되지 않음';
+
+    //   if (applyNums.includes(i)) {
+    //     val = 1;
+    //     cls = 'highlight-pink';
+    //     tip = `적용회차 당첨 번호: ${i}`;
+    //   } else if (applyBonus === i) {
+    //     val = 1;
+    //     cls = 'highlight-green';
+    //     tip = `적용회차 보너스 번호: ${i}`;
+    //   }
+    //   html += `<td class="${cls}" title="${tip}">${val}</td>`;
+    // }
+    // html += '</tr>';
+
+    // // 3) 예상 후보군
+    // html += `<tr><td colspan="45" class="section-label">예상 후보군</td></tr>`;
+    // html += '<tr>';
+    // for (let i = 1; i <= 45; i++) {
+    //   const inSet = cand.has(i);
+    //   html += `<td class="${inSet ? 'highlight-purple' : ''}">${inSet ? 1 : 0}</td>`;
+    // }
+    // html += '</tr>';
+
+    // // 4) 예상 미노출
+    // const nonSet = new Set(nonExpose);
+    // html += `<tr><td colspan="45" class="section-label">예상 미노출</td></tr>`;
+    // html += '<tr>';
+    // for (let i = 1; i <= 45; i++) {
+    //   const isNX = nonSet.has(i);
+    //   const tip  = `p(${i})=${(P[i] * 100).toFixed(2)}%`;
+    //   html += `<td class="${isNX ? 'highlight-nonexpose' : ''}" title="${tip}">${isNX ? 1 : 0}</td>`;
+    // }
+    // html += '</tr>';
+
+    // html += '</table>';
+    // tableHost.innerHTML = html;
+
+    // applyColumnSeparators(tableHost);
+    // enableColumnHoverBand(tableHost);
 
     // === 세트 렌더 (5×6) ===
     const setsHost = el.exposureSets;
@@ -1081,6 +1151,40 @@
 
     appendLog('완료!', 'ok');
   }
+
+  function applyRowSeparators(tableHost) {
+  const tableEl = tableHost?.querySelector('table');
+  if (!tableEl) { return; }
+  const rows = tableEl.rows;
+  // 헤더(0번)를 제외한 데이터 행(1..45) 중 5의 배수 뒤에 진한 구분선을 주고 싶다면:
+  for (let r = 1; r < rows.length; r++) {
+    if (r % 5 === 0) {
+      rows[r].classList.add('row-sep'); // CSS에서 border-top 두껍게
+    }
+  }
+}
+
+function enableRowHoverBand(tableHost) {
+  const tableEl = tableHost?.querySelector('table');
+  if (!tableEl) { return; }
+  tableEl.addEventListener('mousemove', (e) => {
+    const tr = e.target.closest('tr');
+    if (!tr || tr.rowIndex === 0) {
+      clearRowHover(tableEl); return;
+    }
+    if (!tr.classList.contains('row-hover')) {
+      clearRowHover(tableEl);
+      tr.classList.add('row-hover');
+    }
+  });
+  tableEl.addEventListener('mouseleave', () => {
+    clearRowHover(tableEl);
+  });
+  function clearRowHover(tbl) {
+    const prev = tbl.querySelectorAll('.row-hover');
+    prev.forEach((n) => n.classList.remove('row-hover'));
+  }
+}
 
   /* ===================== 초기화/이벤트 ===================== */
   window.addEventListener('DOMContentLoaded', async () => {
