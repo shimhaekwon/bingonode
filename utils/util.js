@@ -7,8 +7,18 @@ const util = {
    */
   methodLog(tag, req = undefined) {
     try {
-      // 공통 태그 출력
-      console.log('Current Method :', tag);
+
+        const stack = new Error().stack.split("\n");
+
+        // stack[0] = "Error"
+        // stack[1] = 현재 logWithCaller 함수
+        // stack[2] = logWithCaller를 호출한 위치
+        const callerInfo = stack[2].trim();
+
+        console.log(`Current Method:[${callerInfo}], request.body:[${req&&req.body?JSON.stringify(req.body):"req is undefined"}]`);
+
+    //   // 공통 태그 출력
+    //   console.log('Current Method :', tag);
 
       // req가 없으면 안전하게 종료
       if (!req) {

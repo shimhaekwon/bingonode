@@ -2,12 +2,14 @@
 const { execAll, execGet, execRun } = require('@config/db.js');
 const { BingoQueries } = require('@queries/bingoQueries.js');
 
-async function setCreate(row) {
+async function getList(limit = 99999, offset = 0) {
   try {
-    await execRun(BingoQueries.setCreate, Object.values(row));
-    return true;
+    const rows = await execAll(BingoQueries.getList, [limit, offset]);
+    const totalResult = await execGet(BingoQueries.getCount, []);
+    const total = totalResult ? totalResult.cnt : 0;
+    return { rows, total };
   } catch (error) {
-    console.error('createBingo error:', error);
+    console.error('getList error:', error);
     throw error;
   }
 }
@@ -22,14 +24,42 @@ async function getOne(seq) {
   }
 }
 
-async function getList(limit = 99999, offset = 0) {
+async function getRecent(rounds) {
   try {
-    const rows = await execAll(BingoQueries.getList, [limit, offset]);
-    const totalResult = await execGet(BingoQueries.getCount, []);
-    const total = totalResult ? totalResult.cnt : 0;
-    return { rows, total };
+    const rows = await execAll(BingoQueries.getRecent, [rounds]);
+    return rows;
   } catch (error) {
-    console.error('getList error:', error);
+    console.error('getRecent error:', error);
+    throw error;
+  }
+}
+
+async function getCount(rounds) {
+  try {
+    const rows = await execGet(BingoQueries.getCount, [rounds]);
+    return rows;
+  } catch (error) {
+    console.error('getRecent error:', error);
+    throw error;
+  }
+}
+
+async function getMaxSeq() {
+  try {
+    const row = await execGet(BingoQueries.getMaxSeq, );
+    return row || null;
+  } catch (error) {
+    console.error('getOne error:', error);
+    throw error;
+  }
+}
+
+async function setUpsert(seq, row) {
+  try {
+    await execRun(BingoQueries.setUpsert, Object.values(row));
+    return true;
+  } catch (error) {
+    console.error('setUpsert error:', error);
     throw error;
   }
 }
@@ -55,34 +85,15 @@ async function setDelete(seq) {
   }
 }
 
-async function getRecent(rounds) {
-  try {
-    const rows = await execAll(BingoQueries.getRecent, [rounds]);
-    return rows;
-  } catch (error) {
-    console.error('getRecent error:', error);
-    throw error;
-  }
-}
-
-async function getCount(rounds) {
-  try {
-    const rows = await execGet(BingoQueries.getCount, [rounds]);
-    return rows;
-  } catch (error) {
-    console.error('getRecent error:', error);
-    throw error;
-  }
-}
-
 module.exports = {
-  setCreate,
-  getOne,
   getList,
+  getOne,
   getCount,
+  getRecent,
+  getMaxSeq,
+  setUpsert,
   setUpdate,
   setDelete,
-  getRecent,
 };
 
 

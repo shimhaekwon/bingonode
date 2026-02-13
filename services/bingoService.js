@@ -1,5 +1,107 @@
 // services/bingoService.js
-// ⚠️ DB 접근 없음: getRecentHistory 관련 제거
+// ./services/bingo.service.js
+const axios = require('axios');
+const pLimit = require('p-limit');
+const bingoModel = require('@models/bingoModel.js');
+
+// --- DHL fetchers ---
+async function fetchLatestRound_v1() {
+  const url = 'https://www.dhlottery.co.kr/lt645/selectPstLt645Info.do';
+  const res = await axios.get(url, {
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'Referer': 'https://www.dhlottery.co.kr/gameResult.do?method=byWin',
+      'User-Agent': 'Mozilla/5.0',
+    },
+    timeout: 10_000,
+    validateStatus: (s) => s >= 200 && s < 500,
+  });
+  // 실제 응답 구조는 네트워크 탭으로 1회 확인하세요.
+  const latest = res?.data?.data?.list?.[0]?.ltEpsd;
+  if (!Number.isInteger(latest)) {
+    throw new Error('fetchLatestRound_v1: latest not found');
+  }
+  return latest;
+}
+
+async function fetchLatestRound_v2() {
+  const url = 'https://dhlottery.co.kr/common.do?method=main';
+  const html = await axios.get(url, { timeout: 10_000 }).then((r) => r.data);
+  const m = html.match(/id="lottoDrwNo">(\d+)</);
+  if (!m) {
+    throw new Error('fetchLatestRound_v2: latest not found');
+  }
+  return parseInt(m[1], 10);
+}
+
+async function fetchRoundDetail(drwNo) {
+  const url = `https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=${drwNo}`;
+  const { data } = await axios.get(url, { timeout: 10_000 });
+  if (data?.returnValue !== 'success') {
+    throw new Error(`getLottoNumber failed for ${drwNo}`);
+  }
+  return {
+    seq: data.drwNo,
+    numbers: [data.drwtNo1, data.drwtNo2, data.drwtNo3, data.drwtNo4, data.drwtNo5, data.drwtNo6],
+    bonus: data.bnusNo,
+    drawDate: data.drwNoDate,
+  };
+}
+
+// --- Sync entry point (called by controller) ---
+let syncing = false; // simple lock in single process
+
+async function syncLatest() {
+  if (syncing) {
+    return { running: true, message: 'sync already running' };
+  }
+  syncing = true;
+  try {
+    const dbLatest = await bingoModel.getMaxSeq();
+
+    // 최신 회차 식별: v1 -> v2
+    let remoteLatest = 0;
+    try {
+      remoteLatest = await fetchLatestRound_v1();
+    } catch {
+      remoteLatest = await fetchLatestRound_v2();
+    }
+    if (!Number.isInteger(remoteLatest) || remoteLatest <= 0) {
+      throw new Error('invalid remoteLatest');
+    }
+
+    if (remoteLatest > dbLatest) {
+      // 누락 회차 수집 (동시 3개 제한)
+      const limit = pLimit(3);
+      const tasks = [];
+      for (let r = dbLatest + 1; r <= remoteLatest; r++) {
+        tasks.push(limit(async () => await fetchRoundDetail(r)));
+      }
+      const results = await Promise.all(tasks);
+      for (detail in results){
+        //await upsertMany(results);
+        await bingoModel.setUpsert(detail);
+      }
+      return {
+        running: false,
+        updated: results.length,
+        range: `${dbLatest + 1}..${remoteLatest}`,
+      };
+    } else if (remoteLatest === dbLatest) {
+      // 최신 회차 재검증/보정(선택)
+      try {
+        const detail = await fetchRoundDetail(dbLatest);
+        await bingoModel.setUpsert(detail);
+      } catch (_) {}
+      return { running: false, updated: 0, range: null };
+    } else {
+      // remoteLatest < dbLatest 는 사실상 드묾 → 무시
+      return { running: false, updated: 0, range: null };
+    }
+  } finally {
+    syncing = false;
+  }
+}
 
 const DEFAULT_OPTIONS = {
   numberRangeMax: 45,
@@ -210,7 +312,7 @@ function computeEffectiveHistory(history, options) {
 }
 
 // ---------- 후보 풀 계산 ----------
-export function buildCandidatePool(history, options) {
+function buildCandidatePool(history, options) {
   const maxN = options.numberRangeMax;
   const { freq, skip } = analyzeHistory(history, maxN);
   const draws = history.length;
@@ -315,7 +417,7 @@ function diversify(sets, penaltyThreshold = 3) {
 }
 
 // ---------- 메인 API ----------
-export function generatePredictions(userOptions = {}) {
+function generatePredictions(userOptions = {}) {
   const options = { ...DEFAULT_OPTIONS, ...userOptions };
   const rawHistory = Array.isArray(userOptions.history) ? userOptions.history : [];
 
@@ -345,3 +447,10 @@ export function generatePredictions(userOptions = {}) {
     candidatePool: pool
   };
 }
+
+
+module.exports = {
+  syncLatest,
+  generatePredictions,
+  buildCandidatePool
+};

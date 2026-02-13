@@ -4,15 +4,17 @@ const zmod = require('zod');
 const z = zmod.z || zmod;
 
 // ------- Models / Services (module-alias 사용) -------
-const {
-  setCreate,
-  getOne,
-  getList,
-  setUpdate,
-  setDelete,
-  getRecent
-} = require('@models/bingoModel.js');
-const { generatePredictions } = require('@services/bingoService.js');
+// const {
+//   setCreateModel,
+//   getOneModel,
+//   getListModel,
+//   setUpdateModel,
+//   setUpsertModel,
+//   getRecentModel
+// } = require('@models/bingoModel.js');
+
+const bingoModel = require('@models/bingoModel.js');
+const bingoService = require('@services/bingoService.js');
 
 // (calController 스타일 로깅 유틸—없으면 주석 처리하세요)
 const util = require('@utils/util.js');
@@ -42,27 +44,18 @@ const updateSchema = insertSchema.omit({ seq: true });
 
 // ------- Controller (모든 핸들러는 POST + body만 사용) -------
 const bingoController = {
-  // POST /api/bingo/getOne  { seq:number }  
-  // getOne 예시
-  getOne: async (req, res) => {
+
+  postSync: async (req, res) => {
     try {
-      util?.methodLog?.('bingoController.getOne');
-      const parsed = seqOnlySchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({
-          message: 'Invalid payload',
-          errors: parsed.error.flatten()
-        });
-      }
-      const row = await getOne(parsed.data.seq);  // ← await 추가
-      if (!row) return res.status(404).json({ message: 'Not found' });
-      return res.json(row);
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ error: error.message });
+      const result = await bingoService.syncLatest();
+      // 202 Accepted (비동기 작업 개시/진행) or 200 OK (즉시 완료) 중 택1
+      // 여기서는 항상 202로 응답(프론트는 비동기 진행으로 이해)
+      return res.status(202).json({ ok: true, ...result });
+    } catch (err) {
+      console.error('[bingoController] sync error:', err);
+      return res.status(500).json({ ok: false, message: 'sync failed' });
     }
   },
-
 
   // POST /api/bingo/getList  { limit?:number, offset?:number }
   getList: async (req, res) => {
@@ -78,8 +71,29 @@ const bingoController = {
         });
       }
       const { limit, offset } = parsed.data;
-      const { rows, total } = await getList(limit, offset);
+      const { rows, total } = await bingoModel.getList(limit, offset);
       return res.json({ rows, total, limit, offset });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: error.message });
+    }
+  },
+
+  // POST /api/bingo/getOne  { seq:number }  
+  // getOne 예시
+  getOne: async (req, res) => {
+    try {
+      util?.methodLog?.('bingoController.getOne');
+      const parsed = seqOnlySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: 'Invalid payload',
+          errors: parsed.error.flatten()
+        });
+      }
+      const row = await bingoModel.getOne(parsed.data.seq);  // ← await 추가
+      if (!row) return res.status(404).json({ message: 'Not found' });
+      return res.json(row);
     } catch (error) {
       console.error(error);
       return res.status(500).json({ error: error.message });
@@ -100,7 +114,7 @@ const bingoController = {
         });
       }
       const { limit, offset } = parsed.data;
-      const { rows, total } = await getRecent(limit, offset);
+      const { rows, total } = await bingoModel.getRecent(limit, offset);
       return res.json({ rows, total, limit, offset });
     } catch (error) {
       console.error(error);
@@ -108,30 +122,10 @@ const bingoController = {
     }
   },
 
-  // bingoController.setCreate 예시 (나머지도 동일)
-  setCreate: async (req, res) => {
-    try {
-      util?.methodLog?.('bingoController.setCreate');
-      const parsed = insertSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({
-          message: 'Invalid payload',
-          errors: parsed.error.flatten()
-        });
-      }
-      const ok = await setCreate(parsed.data);  // ← await 추가
-      if (!ok) return res.status(404).json({ message: 'Not found' });
-      return res.json({ ok: true });
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ error: error.message });
-    }
-  },
-
   // POST /api/bingo/update  { seq:number, data:{ no1..no7? } }
-  setUpdate: async (req, res) => {
+  setUpsert: async (req, res) => {
     try {
-      util?.methodLog?.('bingoController.setUpdate');
+      util?.methodLog?.('bingoController.setUpsert');
       // body: { seq, ...fields }
       if (!req.body || typeof req.body !== 'object') {
         return res.status(400).json({ message: 'Invalid payload' });
@@ -148,7 +142,7 @@ const bingoController = {
           }
         });
       }
-      const ok = await setUpdate(head.data.seq, tail.data);
+      const ok = await bingoModel.setUpsert(head.data.seq, tail.data);
       if (!ok) return res.status(404).json({ message: 'Not found' });
       return res.json({ ok: true });
     } catch (error) {
@@ -157,49 +151,6 @@ const bingoController = {
     }
   },
 
-  // POST /api/bingo/setRemove  { seq:number }
-  setRemove: async (req, res) => {
-    try {
-      util?.methodLog?.('bingoController.setRemove');
-      const parsed = seqOnlySchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({
-          message: 'Invalid payload',
-          errors: parsed.error.flatten()
-        });
-      }
-      const ok = await setRemove(parsed.data.seq);
-      if (!ok) return res.status(404).json({ message: 'Not found' });
-      return res.json({ ok: true });
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ error: error.message });
-    }
-  },
-
-  // POST /api/bingo/getPredict  { ...options }
-  // getPredict: async (req, res) => {
-  //   try {
-  //     util?.methodLog?.('bingoController.getPredict');
-
-  //     // 그대로 서비스에 전달 (history 포함 가능)
-  //     const result = await generatePredictions(req.body ?? {});
-
-  //     return res.json({
-  //       ...result,
-  //       uiHints: {
-  //         table: { columnLines: true, hoverHighlight: true },
-  //         exposure: {
-  //           sets: result.options.setCount,
-  //           perSet: result.options.numbersPerSet
-  //         }
-  //       }
-  //     });
-  //   } catch (error) {
-  //     console.error(error);
-  //     return res.status(500).json({ error: error.message });
-  //   }
-  // }
   getPredict: async (req, res) => {
     try {
       util?.methodLog?.('bingoController.getPredict');

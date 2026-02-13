@@ -6,6 +6,7 @@ const apiController = require('@controllers/bingoController.js');
 
 router.post('/getOne', apiController.getOne);
 router.post('/getList', apiController.getList);
+router.post('/sync', apiController.postSync);
 router.post('/getPredict', apiController.getPredict);
 
 module.exports = router;

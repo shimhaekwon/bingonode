@@ -1113,6 +1113,15 @@
       typePanel      : document.getElementById('typePanel'),
       progress       : document.getElementById('progress')
     };
+//-------------------------------------------------------------------------------------------//
+    try {
+      fetch('/api/bingo/sync', { method: 'POST' }).catch(() => {});
+    }catch (err) {
+      console.error(err);
+      appendLog('초기 데이터 Sync 실패', 'err');
+    }
+//-------------------------------------------------------------------------------------------//
+
 
     try {
       // 이미 준비된 전역이 없다면 서버에서 로드(or 이벤트 대기)

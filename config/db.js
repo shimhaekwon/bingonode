@@ -11,8 +11,11 @@ function execAll(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.all(sql, params, function(err, rows) {  // ← function 사용 (arrow function 아님)
       if (err) {
+        console.error('execGet SQL:', sql);
         console.error('execAll error:', err.message);
         return reject(err);
+      }else {        
+        console.log('execGet SQL:', sql);
       }
       resolve(rows || []);
     });
@@ -26,6 +29,8 @@ function execGet(sql, params = []) {
         console.error('execGet SQL:', sql);
         console.error('execGet error:', err.message);
         return reject(err);
+      }else {        
+        console.log('execGet SQL:', sql);
       }
       resolve(row || null);
     });
@@ -36,8 +41,11 @@ function execRun(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function(err) {  // ← function 사용 (this 사용)
       if (err) {
+        console.error('execGet SQL:', sql);
         console.error('execRun error:', err.message);
         return reject(err);
+      }else {        
+        console.log('execGet SQL:', sql);
       }
       resolve({ changes: this.changes, lastID: this.lastID });
     });
