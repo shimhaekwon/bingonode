@@ -1,7 +1,7 @@
 //<!-- 페이지 하단에 로드 -->
 /* ===========================================================
  * UI-Only Lotto Viewer
- * - 모든 분석/예측은 서버에서 수행 (/api/bingo, /api/bingo/predict)
+ * - 모든 분석/예측은 서버에서 수행 (/myapi, /myapi/predict)
  * - 프론트는 데이터 표와 후보/세트 결과 렌더에만 집중
  * - 6×5 노출(고정), 후보 k=6~15, k=7(P≥3)/k=10(P≥4) 전달
  * - '붙여넣기'는 Real Data 표시에만 반영(서버 예측에는 반영되지 않음)
@@ -63,12 +63,12 @@
 
   /* ===================== 서버 연동 ===================== */
   async function fetchAllBingoAsNumChosen(limit=1000) {
-    // 서버 /api/bingo는 seq DESC로 리턴한다고 가정
+    // 서버 /myapi는 seq DESC로 리턴한다고 가정
     let offset = 0;
     const out = [];
     while (true) {
-      const res = await fetch(`/api/bingo?limit=${limit}&offset=${offset}`);
-      if (!res.ok) throw new Error('failed to fetch /api/bingo');
+      const res = await fetch(`/myapi/list?limit=${limit}&offset=${offset}`);
+      if (!res.ok) throw new Error('failed to fetch /myapi/list');
       const data = await res.json();
       const rows = data?.rows || [];
       if (!rows.length) break;
@@ -82,7 +82,7 @@
   }
 
   async function callServerPredict(body) {
-    const res = await fetch('/api/bingo/predict', {
+    const res = await fetch('/mayapi/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body || {})

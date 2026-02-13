@@ -1,54 +1,51 @@
-// root/config/database.js
+// @config/db.js
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
-const mybatisMapper = require('mybatis-mapper');
 require('dotenv').config();
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db');
 const db = new sqlite3.Database(DB_PATH);
 
-// 공통 실행기: SELECT( rows ), INSERT/UPDATE/DELETE( run )
+// Promise 래퍼들 (완전 재작성)
 function execAll(sql, params = []) {
-  return new Promise((resolve) => {
-    db.all(sql, params, (err, rows) => {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, function(err, rows) {  // ← function 사용 (arrow function 아님)
       if (err) {
-        console.error('[DB][all] error:', err);
-        resolve({ success: false, message: 'db-error', data: null, error: err.message });
-      } else {
-        resolve({ success: true, message: 'success', data: rows, error: null });
+        console.error('execAll error:', err.message);
+        return reject(err);
       }
+      resolve(rows || []);
+    });
+  });
+}
+
+function execGet(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, function(err, row) {  // ← function 사용
+      if (err) {
+        console.error('execGet SQL:', sql);
+        console.error('execGet error:', err.message);
+        return reject(err);
+      }
+      resolve(row || null);
     });
   });
 }
 
 function execRun(sql, params = []) {
-  return new Promise((resolve) => {
-    db.run(sql, params, function (err) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function(err) {  // ← function 사용 (this 사용)
       if (err) {
-        console.error('[DB][run] error:', err);
-        resolve({ success: false, message: 'db-error', data: null, error: err.message });
-      } else {
-        resolve({ success: true, message: 'success', data: { changes: this.changes, lastID: this.lastID }, error: null });
+        console.error('execRun error:', err.message);
+        return reject(err);
       }
+      resolve({ changes: this.changes, lastID: this.lastID });
     });
   });
 }
 
-// mybatis-mapper 로드 + SQL 생성 + 실행
-const generateQuery = async (mapperPath, namespace, sqlId, parameters = {}) => {
-  try {
-    const xmlFilePath = path.resolve(__dirname, mapperPath);
-    mybatisMapper.createMapper([xmlFilePath]);  // 필요한 시점에 매퍼 로드
-    const format = { language: 'sql', indent: '  ' };
-    const sql = mybatisMapper.getStatement(namespace, sqlId, parameters, format);
-
-    // 간단 규칙: SELECT면 all, 아니면 run
-    const isSelect = /^\s*select/i.test(sql);
-    return isSelect ? execAll(sql, []) : execRun(sql, []);
-  } catch (error) {
-    console.error('[DB][generateQuery] error:', error);
-    return { success: false, message: 'database-generateQuery-error', data: parameters, error: error.message };
-  }
+module.exports = {
+  execAll,
+  execGet,
+  execRun,
 };
-
-module.exports = { generateQuery };

@@ -4,6 +4,7 @@
   "private": true,
   "_moduleAliases": {
     "@root": ".",
+    "@controllers": "controllers",
     "@routes": "routes",
     "@services": "services",
     "@models": "models",
@@ -19,7 +20,7 @@
     "prod": "cross-env NODE_ENV=production node ./bin/www"
   },
   "dependencies": {
-    "better-sqlite3": "^12.6.2",
+    "audit": "^0.0.6",
     "chokidar": "^3.5.3",
     "cookie-parser": "~1.4.4",
     "cross-env-shell": "7.0.3",
@@ -31,10 +32,10 @@
     "morgan": "~1.9.1",
     "nunjucks": "^3.2.3",
     "pug": "^3.0.2",
+    "sqlite3": "^5.1.7",
     "zod": "4.3.6"
   },
   "devDependencies": {
     "cross-env": "^10.1.0"
   }
-  
 }

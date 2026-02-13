@@ -2,24 +2,38 @@
 <html>
 <head>
   <title>계산기</title>
+  <meta charset="utf-8" />
+  <style>
+    form { display: flex; gap: 8px; align-items: center; }
+    .toolbar { margin: 12px 0; }
+  </style>
 </head>
 <body>
   <h1>간단 계산기</h1>
+
+  <!-- 랜덤 값 가져오기 버튼 -->
+  <div class="toolbar">
+    <button id="btnRandom" type="button">랜덤 값 받기</button>
+    <!-- 예: 로또 스타일이면 min/max를 바꿔 부를 수 있음 -->
+    <!-- <button id="btnRandomLotto" type="button">1~45 랜덤</button> -->
+  </div>
+
   <form id="calcForm">
-    <input type="number" name="num1" placeholder="숫자1" required>
+    <input id="inputNum1" type="number" name="num1" placeholder="숫자1" required>
     <select name="op">
       <option value="+">+</option>
       <option value="-">-</option>
       <option value="*">*</option>
       <option value="/">/</option>
     </select>
-    <input type="number" name="num2" placeholder="숫자2" required>
+    <input id="inputNum2" type="number" name="num2" placeholder="숫자2" required>
     <button type="submit">계산</button>
   </form>
 
   <h2>결과: <span id="result"></span></h2>
 
   <script>
+    // 계산 수행
     document.getElementById('calcForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const formData = new FormData(e.target);
@@ -28,8 +42,7 @@
         num2: formData.get('num2'),
         op: formData.get('op')
       };
-
-      const res = await fetch('/myapi/calc', {
+      const res = await fetch('/api/calc/calc', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -37,6 +50,33 @@
       const json = await res.json();
       document.getElementById('result').textContent = json.result;
     });
+
+    // 랜덤 값 받기
+    document.getElementById('btnRandom').addEventListener('click', async () => {
+      try {
+        // 기본: 0~100 정수
+        const res = await fetch('/api/calc/random', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          //body: JSON.stringify(data)
+        });
+        const { num1, num2 } = await res.json();
+        document.getElementById('inputNum1').value = num1;
+        document.getElementById('inputNum2').value = num2;
+      } catch (err) {
+        alert('랜덤 값을 가져오지 못했습니다.');
+        console.error(err);
+      }
+    });
+
+    // (옵션) 로또 스타일 1~45 정수
+    // document.getElementById('btnRandomLotto').addEventListener('click', async () => {
+    //   const res = await fetch('/myapi/calc/random?min=1&max=45');
+    //   const { num1, num2 } = await res.json();
+    //   document.getElementById('inputNum1').value = num1;
+    //   document.getElementById('inputNum2').value = num2;
+    // });
   </script>
 </body>
 </html>
+``
