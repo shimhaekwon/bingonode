@@ -1,456 +1,481 @@
 // services/bingoService.js
-// ./services/bingo.service.js
+'use strict';
+
 const axios = require('axios');
-const pLimit = require('p-limit');
 const bingoModel = require('@models/bingoModel.js');
 
-// --- DHL fetchers ---
-async function fetchLatestRound_v1() {
-  const url = 'https://www.dhlottery.co.kr/lt645/selectPstLt645Info.do';
+// ---- p-limit (CJS/ESM 호환 + 폴백) ----
+let pLimit = null;
+try {
+  pLimit = require('p-limit');
+  if (pLimit && typeof pLimit !== 'function' && pLimit.default) {
+    pLimit = pLimit.default;
+  }
+} catch {
+  // 미설치 시 동시 1개로 degrade
+  pLimit = (concurrency) => {
+    let activeCount = 0;
+    const queue = [];
+    const next = () => {
+      activeCount--;
+      if (queue.length > 0) queue.shift()();
+    };
+    return (fn, ...args) => new Promise((resolve, reject) => {
+      const run = () => {
+        activeCount++;
+        Promise.resolve().then(() => fn(...args)).then(resolve, reject).finally(next);
+      };
+      activeCount < Math.max(1, concurrency) ? run() : queue.push(run);
+    });
+  };
+}
+
+// ===================== LOG/UTILS =====================
+const DEBUG = process.env.DEBUG_SYNC === '1';
+
+const LOG = {
+  info: (...args) => console.log('[bingo:info]', ...args),
+  warn: (...args) => console.warn('[bingo:warn]', ...args),
+  err:  (...args) => console.error('[bingo:err ]', ...args),
+  dbg:  (...args) => { if (DEBUG) console.log('[bingo:dbg ]', ...args); }
+};
+
+function brief(obj, maxLen = 200) {
+  try {
+    const s = typeof obj === 'string' ? obj : JSON.stringify(obj);
+    return s.length <= maxLen ? s : s.slice(0, maxLen) + '...(' + s.length + ' bytes)';
+  } catch {
+    return String(obj);
+  }
+}
+
+function mem() {
+  const { rss, heapUsed, heapTotal } = process.memoryUsage();
+  return `rss=${(rss/1e6).toFixed(1)}MB heapUsed=${(heapUsed/1e6).toFixed(1)}MB heapTotal=${(heapTotal/1e6).toFixed(1)}MB`;
+}
+
+const JSON_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+  'Referer': 'https://www.dhlottery.co.kr/gameResult.do?method=byWin',
+  'Accept': 'application/json, text/javascript, */*; q=0.01',
+  'X-Requested-With': 'XMLHttpRequest',
+  'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
+};
+
+const HTML_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+  'Referer': 'https://www.dhlottery.co.kr/',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+  'Upgrade-Insecure-Requests': '1',
+  'Connection': 'keep-alive'
+};
+
+// ===================== HELPERS =====================
+function normalizeMaxSeq(dbLatest) {
+  if (dbLatest == null) return { maxSeq: 0 };
+  if (typeof dbLatest === 'number') return { maxSeq: dbLatest };
+  const candidates = ['maxSeq', 'maxseq', 'max_eq', 'maxeq', 'maxed', 'max', 'seq', 'lastSeq', 'latest', 'latestSeq'];
+  for (const k of candidates) {
+    if (Number.isInteger(dbLatest?.[k])) return { maxSeq: dbLatest[k] };
+  }
+  const numeric = Object.values(dbLatest).find(v => Number.isInteger(v));
+  return { maxSeq: numeric ?? 0 };
+}
+
+async function retry(fn, { retries = 2, baseDelay = 400 } = {}) {
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (i < retries) {
+        const wait = baseDelay * Math.pow(2, i);
+        LOG.warn(`retry: attempt ${i + 1}/${retries + 1} failed: ${e?.message} -> wait ${wait}ms`);
+        await new Promise(r => setTimeout(r, wait));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+// ===================== DHL fetchers =====================
+async function fetchLatestRound_v1(maxeq) {
+  // JSON endpoint
+  const qs = Number.isInteger(maxeq) && maxeq > 0 ? `?srchDir=center&srchLtEpsd=${maxeq}` : '?srchDir=center';
+  const url = 'https://www.dhlottery.co.kr/lt645/selectPstLt645InfoNew.do' + qs;
+  LOG.dbg('fetchLatestRound_v1: GET', url);
+  const started = Date.now();
+
   const res = await axios.get(url, {
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'Referer': 'https://www.dhlottery.co.kr/gameResult.do?method=byWin',
-      'User-Agent': 'Mozilla/5.0',
-    },
+    headers: JSON_HEADERS,
     timeout: 10_000,
     validateStatus: (s) => s >= 200 && s < 500,
+    maxRedirects: 3
   });
-  // 실제 응답 구조는 네트워크 탭으로 1회 확인하세요.
-  const latest = res?.data?.data?.list?.[0]?.ltEpsd;
-  if (!Number.isInteger(latest)) {
-    throw new Error('fetchLatestRound_v1: latest not found');
-  }
+
+  LOG.dbg('fetchLatestRound_v1: status', res.status, 'elapsed', `${Date.now() - started}ms`);
+  const data = res?.data;
+
+  const latest =
+    data?.data?.list?.[0]?.ltEpsd ??
+    data?.list?.[0]?.ltEpsd ??
+    data?.drwNo ??
+    data?.latest ??
+    null;
+
+  LOG.dbg('fetchLatestRound_v1: parsed latest =', latest);
+  if (!Number.isInteger(latest)) throw new Error('fetchLatestRound_v1: latest not found');
   return latest;
 }
 
 async function fetchLatestRound_v2() {
-  const url = 'https://dhlottery.co.kr/common.do?method=main';
-  const html = await axios.get(url, { timeout: 10_000 }).then((r) => r.data);
-  const m = html.match(/id="lottoDrwNo">(\d+)</);
-  if (!m) {
-    throw new Error('fetchLatestRound_v2: latest not found');
+  // HTML 파싱
+  const url = 'https://www.dhlottery.co.kr/common.do?method=main';
+  LOG.dbg('fetchLatestRound_v2: GET', url);
+  const started = Date.now();
+
+  const html = await axios.get(url, {
+    headers: HTML_HEADERS,
+    timeout: 10_000,
+    validateStatus: s => s >= 200 && s < 500,
+    maxRedirects: 3
+  }).then(r => r.data);
+
+  LOG.dbg('fetchLatestRound_v2: html length', html?.length, 'elapsed', `${Date.now() - started}ms`);
+  if (!html || typeof html !== 'string' || html.length < 500) {
+    throw new Error(`fetchLatestRound_v2: unexpected html (len=${html?.length ?? 0})`);
   }
-  return parseInt(m[1], 10);
+
+  let m = html.match(/id="lottoDrwNo"[^>]*>\s*(\d+)\s*</);
+  if (!m) m = html.match(/name="lottoDrwNo"[^>]*value="(\d+)"/);
+  const latest = m ? parseInt(m[1], 10) : null;
+
+  LOG.dbg('fetchLatestRound_v2: parsed latest =', latest);
+  if (!Number.isInteger(latest)) throw new Error('fetchLatestRound_v2: latest draw number not found');
+  return latest;
+}
+
+async function fetchRoundsRange(startSeq, endSeq) {
+  const url = `https://www.dhlottery.co.kr/lt645/selectPstLt645Info.do?srchStrLtEpsd=${startSeq}&srchEndLtEpsd=${endSeq}&_=${Date.now()}`;
+  LOG.dbg('fetchRoundsRange: GET', url);
+  const t0 = Date.now();
+
+  const { data, status } = await axios.get(url, {
+    headers: JSON_HEADERS,
+    timeout: 15_000,
+    validateStatus: s => s >= 200 && s < 500,
+    maxRedirects: 3
+  });
+
+  LOG.dbg('fetchRoundsRange: status', status, 'elapsed', `${Date.now() - t0}ms`);
+
+  // 응답 데이터 파싱
+  // 형식: { data: { list: [{ ltEpsd: 1211, tm1WnNo: 23, tm2WnNo: 26, ..., bnsWnNo: 10 }, ...] } }
+  const list = data?.data?.list || data?.list || [];
+  
+  if (!Array.isArray(list) || list.length === 0) {
+    throw new Error(`fetchRoundsRange: no data returned for ${startSeq}..${endSeq}`);
+  }
+
+  const results = list.map(item => ({
+    seq: parseInt(item.ltEpsd, 10),
+    no1: parseInt(item.tm1WnNo, 10),
+    no2: parseInt(item.tm2WnNo, 10),
+    no3: parseInt(item.tm3WnNo, 10),
+    no4: parseInt(item.tm4WnNo, 10),
+    no5: parseInt(item.tm5WnNo, 10),
+    no6: parseInt(item.tm6WnNo, 10),
+    no7: parseInt(item.bnsWnNo, 10),
+    bonus: parseInt(item.bnsWnNo, 10),
+    drawDate: item.ltRflYmd || null
+  })).filter(item => Number.isInteger(item.seq) && item.seq >= 1);
+
+  LOG.dbg('fetchRoundsRange: parsed', results.length, 'rounds');
+  return results;
 }
 
 async function fetchRoundDetail(drwNo) {
   const url = `https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=${drwNo}`;
-  const { data } = await axios.get(url, { timeout: 10_000 });
+  LOG.dbg('fetchRoundDetail: GET', url);
+  const t0 = Date.now();
+
+  const { data, status } = await axios.get(url, {
+    headers: JSON_HEADERS,
+    timeout: 10_000,
+    validateStatus: s => s >= 200 && s < 500,
+    maxRedirects: 3
+  });
+
+  LOG.dbg('fetchRoundDetail: status', status, 'elapsed', `${Date.now() - t0}ms`);
+  LOG.dbg('fetchRoundDetail: returnValue', data?.returnValue, 'drwNo', data?.drwNo);
+
   if (data?.returnValue !== 'success') {
-    throw new Error(`getLottoNumber failed for ${drwNo}`);
+    throw new Error(`getLottoNumber failed for ${drwNo} (returnValue=${data?.returnValue ?? 'n/a'})`);
   }
-  return {
+
+  const detail = {
     seq: data.drwNo,
-    numbers: [data.drwtNo1, data.drwtNo2, data.drwtNo3, data.drwtNo4, data.drwtNo5, data.drwtNo6],
+    no1: data.drwtNo1, no2: data.drwtNo2, no3: data.drwtNo3,
+    no4: data.drwtNo4, no5: data.drwtNo5, no6: data.drwtNo6,
+    no7: data.bnusNo,
     bonus: data.bnusNo,
     drawDate: data.drwNoDate,
   };
+  LOG.dbg('fetchRoundDetail: parsed detail', brief(detail, 300));
+  return detail;
 }
 
-// --- Sync entry point (called by controller) ---
-let syncing = false; // simple lock in single process
+async function fetchRoundDetailFromHtml(drwNo) {
+  const url = `https://www.dhlottery.co.kr/gameResult.do?method=byWin&drwNo=${drwNo}`;
+  LOG.dbg('fetchRoundDetailFromHtml: GET', url);
+  const t0 = Date.now();
+
+  const html = await axios.get(url, {
+    headers: HTML_HEADERS,
+    timeout: 10_000,
+    validateStatus: s => s >= 200 && s < 500,
+    maxRedirects: 3
+  }).then(r => r.data);
+
+  LOG.dbg('fetchRoundDetailFromHtml: elapsed', `${Date.now() - t0}ms`);
+
+  if (!html || typeof html !== 'string' || html.length < 500) {
+    throw new Error(`fetchRoundDetailFromHtml: unexpected html (len=${html?.length ?? 0})`);
+  }
+
+  // Parse winning numbers from HTML
+  // Pattern 1: <span class="num">XX</span>
+  const numMatches = html.match(/<span class="num">(\d+)<\/span>/g);
+  if (numMatches && numMatches.length >= 6) {
+    const numbers = numMatches.slice(0, 7).map(m => {
+      const match = m.match(/(\d+)/);
+      return match ? parseInt(match[1], 10) : null;
+    }).filter(n => n !== null && n >= 1 && n <= 45);
+
+    if (numbers.length >= 6) {
+      const detail = {
+        seq: drwNo,
+        no1: numbers[0],
+        no2: numbers[1],
+        no3: numbers[2],
+        no4: numbers[3],
+        no5: numbers[4],
+        no6: numbers[5],
+        no7: numbers[6] || null,
+        bonus: numbers[6] || null,
+        drawDate: null
+      };
+      LOG.dbg('fetchRoundDetailFromHtml: parsed detail', brief(detail, 300));
+      return detail;
+    }
+  }
+
+  // Pattern 2:另一种形式
+  const altPattern = html.match(/drwtNo(\d+)["']?\s*:\s*(\d+)/g);
+  if (altPattern) {
+    const numbers = [];
+    for (const m of altPattern) {
+      const match = m.match(/drwtNo\d+["']?\s*:\s*(\d+)/);
+      if (match) numbers.push(parseInt(match[1], 10));
+    }
+    if (numbers.length >= 6) {
+      const detail = {
+        seq: drwNo,
+        no1: numbers[0], no2: numbers[1], no3: numbers[2],
+        no4: numbers[3], no5: numbers[4], no6: numbers[5],
+        no7: numbers[6] || null,
+        bonus: numbers[6] || null,
+        drawDate: null
+      };
+      LOG.dbg('fetchRoundDetailFromHtml: parsed detail (alt)', brief(detail, 300));
+      return detail;
+    }
+  }
+
+  throw new Error(`fetchRoundDetailFromHtml: could not parse numbers from HTML for drwNo=${drwNo}`);
+}
+
+async function probeLatestByWalkingFrom(dbMaxSeq, maxProbe = 30) {
+  LOG.dbg('probeLatestByWalkingFrom: start from', dbMaxSeq, 'maxProbe', maxProbe);
+  let latest = dbMaxSeq;
+  for (let r = dbMaxSeq + 1; r <= dbMaxSeq + maxProbe; r++) {
+    try {
+      const d = await fetchRoundDetailFromHtml(r);
+      if (d?.seq === r) latest = r;
+      else break;
+    } catch {
+      break;
+    }
+  }
+  if (latest === dbMaxSeq) {
+    for (let r = dbMaxSeq; r >= Math.max(1, dbMaxSeq - 5); r--) {
+      try {
+        const d = await fetchRoundDetailFromHtml(r);
+        if (d?.seq === r) return r;
+      } catch { /* ignore */ }
+    }
+  }
+  return latest;
+}
+
+// ===================== SYNC ENTRY POINT =====================
+let syncing = false;
 
 async function syncLatest() {
+  LOG.info('syncLatest: invoked', new Date().toISOString(), mem());
   if (syncing) {
+    LOG.warn('syncLatest: already running -> skip');
     return { running: true, message: 'sync already running' };
   }
   syncing = true;
-  try {
-    const dbLatest = await bingoModel.getMaxSeq();
+  console.time('syncLatest');
 
-    // 최신 회차 식별: v1 -> v2
+  try {
+    // 1) DB 최신 회차
+    console.time('syncLatest:getDbLatest');
+    const dbLatestRaw = await bingoModel.getMaxSeq();
+    console.timeEnd('syncLatest:getDbLatest');
+
+    const { maxSeq } = normalizeMaxSeq(dbLatestRaw);
+    LOG.info('syncLatest: db maxSeq =', maxSeq);
+
+    // 2) 원격 최신 회차 (v1 -> v2 -> probe)
     let remoteLatest = 0;
     try {
-      remoteLatest = await fetchLatestRound_v1();
-    } catch {
-      remoteLatest = await fetchLatestRound_v2();
+      console.time('syncLatest:fetchLatestRound_v1');
+      remoteLatest = await retry(() => fetchLatestRound_v1(maxSeq), { retries: 1, baseDelay: 500 });
+      console.timeEnd('syncLatest:fetchLatestRound_v1');
+    } catch (e1) {
+      LOG.warn('syncLatest: v1 failed -> fallback v2. reason =', e1?.message);
+      try {
+        console.time('syncLatest:fetchLatestRound_v2');
+        remoteLatest = await retry(() => fetchLatestRound_v2(), { retries: 1, baseDelay: 500 });
+        console.timeEnd('syncLatest:fetchLatestRound_v2');
+      } catch (e2) {
+        LOG.warn('syncLatest: v2 failed -> fallback probe. reason =', e2?.message);
+        console.time('syncLatest:probeLatestByWalkingFrom');
+        remoteLatest = await probeLatestByWalkingFrom(maxSeq, 30);
+        console.timeEnd('syncLatest:probeLatestByWalkingFrom');
+      }
     }
+    LOG.info('syncLatest: remoteLatest =', remoteLatest);
+
     if (!Number.isInteger(remoteLatest) || remoteLatest <= 0) {
       throw new Error('invalid remoteLatest');
     }
 
-    if (remoteLatest > dbLatest) {
-      // 누락 회차 수집 (동시 3개 제한)
-      const limit = pLimit(3);
-      const tasks = [];
-      for (let r = dbLatest + 1; r <= remoteLatest; r++) {
-        tasks.push(limit(async () => await fetchRoundDetail(r)));
+    // 3) 누락 회차 수집/업서트
+    if (remoteLatest > maxSeq) {
+      const missingCount = remoteLatest - maxSeq;
+      LOG.info(`syncLatest: missing rounds = ${missingCount} (${maxSeq + 1}..${remoteLatest})`);
+
+      // 새로운 범위 조회 API 사용
+      console.time('syncLatest:fetchRoundsRange');
+      let results = [];
+      try {
+        results = await retry(
+          () => fetchRoundsRange(maxSeq + 1, remoteLatest),
+          { retries: 2, baseDelay: 500 }
+        );
+      } catch (e) {
+        LOG.warn('fetchRoundsRange failed, falling back to individual fetch:', e.message);
+        
+        // 폴백: 개별 조회
+        const limit = pLimit(3);
+        const tasks = [];
+        for (let r = maxSeq + 1; r <= remoteLatest; r++) {
+          tasks.push(
+            limit(async () => {
+              try {
+                const d = await retry(() => fetchRoundDetail(r), { retries: 2, baseDelay: 400 });
+                return d;
+              } catch (err) {
+                LOG.err('syncLatest: fetchRoundDetail failed', r, err?.message);
+                throw err;
+              }
+            })
+          );
+        }
+        const settled = await Promise.allSettled(tasks);
+        results = settled.filter(s => s.status === 'fulfilled').map(s => s.value);
       }
-      const results = await Promise.all(tasks);
-      for (detail in results){
-        //await upsertMany(results);
-        await bingoModel.setUpsert(detail);
+      console.timeEnd('syncLatest:fetchRoundsRange');
+
+      LOG.info('syncLatest: results count =', results.length);
+
+      console.time('syncLatest:upserts');
+      let ok = 0;
+      for (const detail of results) {
+        try {
+          if (typeof bingoModel.setUpsert === 'function') {
+            if (bingoModel.setUpsert.length >= 2) {
+              await bingoModel.setUpsert(detail.seq, detail);
+            } else {
+              await bingoModel.setUpsert(detail);
+            }
+          } else if (typeof bingoModel.upsertBySeq === 'function') {
+            await bingoModel.upsertBySeq(detail.seq, detail);
+          } else {
+            throw new Error('No upsert function found on model');
+          }
+          ok++;
+          if (DEBUG && ok <= 3) LOG.dbg('syncLatest: upserted', brief(detail));
+        } catch (e) {
+          LOG.err('syncLatest: upsert failed seq=', detail?.seq, e?.message);
+        }
       }
+      console.timeEnd('syncLatest:upserts');
+      LOG.info(`syncLatest: upsert done ok=${ok}/${results.length}`);
+
+      console.timeEnd('syncLatest');
       return {
         running: false,
         updated: results.length,
-        range: `${dbLatest + 1}..${remoteLatest}`,
+        range: `${maxSeq + 1}..${remoteLatest}`,
       };
-    } else if (remoteLatest === dbLatest) {
-      // 최신 회차 재검증/보정(선택)
+    }
+
+    // 4) 최신과 동일: 검증/보정
+    if (remoteLatest === maxSeq) {
+      LOG.info('syncLatest: already up to date; verifying the latest row...');
       try {
-        const detail = await fetchRoundDetail(dbLatest);
-        await bingoModel.setUpsert(detail);
-      } catch (_) {}
-      return { running: false, updated: 0, range: null };
-    } else {
-      // remoteLatest < dbLatest 는 사실상 드묾 → 무시
+        console.time('syncLatest:verify-latest');
+        const detail = await retry(() => fetchRoundDetailFromHtml(maxSeq), { retries: 1, baseDelay: 500 });
+        if (typeof bingoModel.setUpsert === 'function') {
+          if (bingoModel.setUpsert.length >= 2) {
+            await bingoModel.setUpsert(detail.seq, detail);
+          } else {
+            await bingoModel.setUpsert(detail);
+          }
+        } else if (typeof bingoModel.upsertBySeq === 'function') {
+          await bingoModel.upsertBySeq(detail.seq, detail);
+        }
+        console.timeEnd('syncLatest:verify-latest');
+        LOG.info('syncLatest: verification/upsert done for seq', maxSeq);
+      } catch (e) {
+        LOG.warn('syncLatest: verification skipped/failed:', e?.message);
+      }
+      console.timeEnd('syncLatest');
       return { running: false, updated: 0, range: null };
     }
+
+    // remoteLatest < dbLatest (비정상 케이스) → 무시
+    LOG.warn('syncLatest: remoteLatest < dbLatest (ignore)');
+    console.timeEnd('syncLatest');
+    return { running: false, updated: 0, range: null };
+
+  } catch (err) {
+    LOG.err('syncLatest: fatal:', err?.message);
+    console.timeEnd('syncLatest');
+    throw err;
   } finally {
     syncing = false;
+    LOG.dbg('syncLatest: done - lock released');
   }
 }
-
-const DEFAULT_OPTIONS = {
-  numberRangeMax: 45,
-  setCount: 5,
-  numbersPerSet: 6,
-  includeBonus: false,
-
-  // 사용자 기본 선호
-  nonExposedRounds: 8,
-  minNonExposedCount: 0,
-  candidatePoolSize: 12,           // 다양성 위해 기본 12
-  kSetting: 7,                     // k=7 → P≥3 목표
-  historyRounds: 30,               // 윈도우 크기(N)
-  chiSquareWeighting: true,
-  centralIntervalWeighting: true,
-
-  // 샘플링/정렬/윈도우 관련
-  temperature: 1.0,                // softmax 온도
-  seed: undefined,
-  historyIsNewestFirst: true,      // history[0]이 최신인지 여부
-  roundField: 'round',             // 회차 필드명 (예: 'round', 'drwNo' 등)
-  targetRound: undefined,          // 기준 회차 값 (number/string)
-  excludeCurrentFromWindow: true,  // 윈도우에서 기준 회차를 제외하여 "이전 N회"만 사용
-  useWindowedHistory: true         // true면 윈도우 슬라이싱 적용
-};
-
-// --------- 유틸/통계 함수들 ---------
-function mulberry32(a) {
-  return function() {
-    let t = (a += 0x6D2B79F5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function choiceWeighted(arr, weights, rand) {
-  const total = weights.reduce((s, w) => s + w, 0);
-  const r = rand() * total;
-  let cum = 0;
-  for (let i = 0; i < arr.length; i++) {
-    cum += weights[i];
-    if (r <= cum) return arr[i];
-  }
-  return arr[arr.length - 1];
-}
-
-// Softmax 가중치 변환
-function toSoftmaxWeights(vals, temperature = 1.0) {
-  if (!Array.isArray(vals) || vals.length === 0) return [];
-  const t = Math.max(0.1, temperature); // t 낮을수록 분포가 날카로워짐
-  const maxV = Math.max(...vals);
-  const exps = vals.map(v => Math.exp((v - maxV) / t));
-  const sum = exps.reduce((a, b) => a + b, 0) || 1;
-  return exps.map(e => e / sum);
-}
-
-// ---------- 히스토리 분석 ----------
-function analyzeHistory(history, numberRangeMax) {
-  const freq = Array(numberRangeMax + 1).fill(0);
-  const lastSeenIndex = Array(numberRangeMax + 1).fill(null);
-
-  // (가정) history[0]이 "해당 윈도우에서 가장 최근"
-  history.forEach((row, idx) => {
-    const nums = [row.no1, row.no2, row.no3, row.no4, row.no5, row.no6].filter(Boolean);
-    nums.forEach(n => {
-      freq[n]++;
-      lastSeenIndex[n] = idx; // 가장 최근 출현 인덱스가 되도록 덮어쓰기
-    });
-    if (row.no7) {
-      lastSeenIndex[row.no7] = idx;
-    }
-  });
-
-  // skip = 마지막 등장으로부터 경과 회차 (윈도우 내 기준)
-  const skip = lastSeenIndex.map(v =>
-    v === null ? history.length : (history.length - 1 - v)
-  );
-
-  return { freq, skip };
-}
-
-function chiSquareWeights(freq, draws, numberRangeMax) {
-  const E = (draws * 6) / numberRangeMax;
-  const eps = 1e-6;
-  const weights = [];
-  for (let n = 1; n <= numberRangeMax; n++) {
-    const O = freq[n] || 0;
-    const chi = (O - E) * (O - E) / (E + eps);
-    weights[n] = 1 / (1 + chi);
-  }
-  return weights;
-}
-
-function centralIntervalWeights(numberRangeMax) {
-  const m = (numberRangeMax + 1) / 2;
-  const sigma = numberRangeMax / 6;
-  const weights = [];
-  for (let n = 1; n <= numberRangeMax; n++) {
-    const d = (n - m) / sigma;
-    weights[n] = Math.exp(-0.5 * d * d);
-  }
-  return weights;
-}
-
-function normalizeWeights(w) {
-  const max = Math.max(...w.slice(1));
-  const eps = 1e-12;
-  return w.map((v, i) => (i === 0 ? 0 : (v + eps) / (max + eps)));
-}
-
-// ---------- 히스토리 윈도우 산정 ----------
-function computeEffectiveHistory(history, options) {
-  const {
-    historyIsNewestFirst = true,
-    roundField = 'round',
-    targetRound,
-    historyRounds = 30,
-    excludeCurrentFromWindow = true,
-    useWindowedHistory = true
-  } = options;
-
-  if (!useWindowedHistory || !Array.isArray(history) || history.length === 0) {
-    // 슬라이싱 비적용: 그대로 반환 (정렬은 downstream에서 가정)
-    return { effectiveHistory: history, windowInfo: { usedFullHistory: true } };
-  }
-
-  // 정렬 방향에 따른 탐색/슬라이스
-  const N = Math.max(1, Math.min(historyRounds, history.length));
-  let startIdx = 0;
-  let endIdx = 0;
-  let pos = -1;
-
-  // targetRound가 있으면 해당 회차의 위치를 찾음
-  if (targetRound !== undefined && targetRound !== null) {
-    pos = history.findIndex(row => row && row[roundField] === targetRound);
-    // 못 찾으면 경고 정보와 함께 디폴트 윈도우 사용
-  }
-
-  if (historyIsNewestFirst) {
-    // 최신이 앞(0)인 배열
-    if (pos >= 0) {
-      // 기준 회차를 포함하는 인덱스 pos 기준
-      // "이전 N회"를 원한다면 기준 회차는 제외하고 pos+1에서 pos+1+N 슬라이스
-      if (excludeCurrentFromWindow) {
-        startIdx = pos + 1;
-        endIdx = Math.min(pos + 1 + N, history.length);
-      } else {
-        startIdx = pos;
-        endIdx = Math.min(pos + N, history.length);
-      }
-    } else {
-      // targetRound를 못 찾았으면 최상단부터 N개(최신 N회)
-      startIdx = 0;
-      endIdx = N;
-    }
-
-    const slice = history.slice(startIdx, endIdx);
-    // 최신이 앞인 정렬을 downstream이 가정하므로 그대로 반환
-    return {
-      effectiveHistory: slice,
-      windowInfo: {
-        usedFullHistory: false,
-        order: 'newestFirst',
-        targetRoundFound: pos >= 0,
-        targetRoundIndex: pos,
-        startIdx,
-        endIdx,
-        size: slice.length,
-        excludeCurrentFromWindow
-      }
-    };
-  } else {
-    // 오래된 것이 앞, 최신이 뒤인 배열
-    if (pos >= 0) {
-      if (excludeCurrentFromWindow) {
-        // pos 이전 N개: [pos - N, pos)
-        startIdx = Math.max(0, pos - N);
-        endIdx = pos;
-      } else {
-        // pos 포함 N개: [pos - (N-1), pos+1)
-        startIdx = Math.max(0, pos - (N - 1));
-        endIdx = Math.min(pos + 1, history.length);
-      }
-    } else {
-      // targetRound를 못 찾았으면 끝에서 N개(최신 N회)
-      startIdx = Math.max(0, history.length - N);
-      endIdx = history.length;
-    }
-
-    const slice = history.slice(startIdx, endIdx);
-    // downstream 일관성을 위해 "최신이 앞"이 되도록 뒤집어서 반환
-    const normalized = slice.slice().reverse();
-    return {
-      effectiveHistory: normalized,
-      windowInfo: {
-        usedFullHistory: false,
-        order: 'oldestFirst->normalizedToNewestFirst',
-        targetRoundFound: pos >= 0,
-        targetRoundIndex: pos,
-        originalStartIdx: startIdx,
-        originalEndIdx: endIdx,
-        size: normalized.length,
-        excludeCurrentFromWindow
-      }
-    };
-  }
-}
-
-// ---------- 후보 풀 계산 ----------
-function buildCandidatePool(history, options) {
-  const maxN = options.numberRangeMax;
-  const { freq, skip } = analyzeHistory(history, maxN);
-  const draws = history.length;
-
-  let w = Array(maxN + 1).fill(1);
-
-  if (options.chiSquareWeighting) {
-    const wChi = chiSquareWeights(freq, draws, maxN);
-    for (let n = 1; n <= maxN; n++) w[n] *= wChi[n];
-  }
-
-  if (options.centralIntervalWeighting) {
-    const wCentral = centralIntervalWeights(maxN);
-    for (let n = 1; n <= maxN; n++) w[n] *= wCentral[n];
-  }
-
-  if (options.nonExposedRounds > 0) {
-    for (let n = 1; n <= maxN; n++) {
-      if (skip[n] >= options.nonExposedRounds) w[n] *= 1.1;  // 완화된 보너스
-      else w[n] *= 0.95;                                    // 완화된 감쇠
-    }
-  }
-
-  w = normalizeWeights(w);
-
-  const candidatePoolSize = Math.max(6, Math.min(options.candidatePoolSize ?? 12, 45));
-  const pool = Array.from({ length: maxN }, (_, i) => i + 1)
-    .sort((a, b) => w[b] - w[a])
-    .slice(0, candidatePoolSize);
-
-  return { pool, finalWeights: w };
-}
-
-// ---------- 1세트 생성 ----------
-function generateOneSet(pool, weights, options, effectiveHistory, rand) {
-  const need = options.numbersPerSet;
-  const selected = [];
-
-  // 최근 N회 번호 제거(가정: effectiveHistory[0]이 최신)
-  let nonExposed = pool;
-  if (options.nonExposedRounds > 0) {
-    const recentNums = new Set();
-    const recentSlice = effectiveHistory.slice(0, options.nonExposedRounds);
-
-    recentSlice.forEach(row => {
-      [row.no1,row.no2,row.no3,row.no4,row.no5,row.no6,row.no7 ?? undefined]
-        .filter(x => typeof x === 'number')
-        .forEach(n => recentNums.add(n));
-    });
-
-    nonExposed = pool.filter(n => !recentNums.has(n));
-  }
-
-  const minNonExposed = Math.max(0, options.minNonExposedCount);
-
-  // 1) 최소 비노출 번호 충족
-  while (selected.length < Math.min(minNonExposed, need) && nonExposed.length > 0) {
-    const raw = nonExposed.map(n => weights[n]);
-    const w = toSoftmaxWeights(raw, options.temperature);
-    const pick = choiceWeighted(nonExposed, w, rand);
-    selected.push(pick);
-    nonExposed = nonExposed.filter(n => n !== pick);
-  }
-
-  // 2) 나머지 선택
-  let remain = pool.filter(n => !selected.includes(n));
-  while (selected.length < need && remain.length > 0) {
-    const raw = remain.map(n => weights[n]);
-    const w = toSoftmaxWeights(raw, options.temperature);
-    const pick = choiceWeighted(remain, w, rand);
-    selected.push(pick);
-    remain = remain.filter(n => n !== pick);
-  }
-
-  selected.sort((a, b) => a - b);
-
-  let bonus = null;
-  if (options.includeBonus) {
-    const leftover = pool.filter(n => !selected.includes(n));
-    if (leftover.length > 0) {
-      const raw = leftover.map(n => weights[n]);
-      const w = toSoftmaxWeights(raw, options.temperature);
-      bonus = choiceWeighted(leftover, w, rand);
-    }
-  }
-
-  return { numbers: selected, bonus, weights: undefined };
-}
-
-// ---------- 세트 다양성 확보 ----------
-function diversify(sets, penaltyThreshold = 3) {
-  const unique = [];
-  for (const s of sets) {
-    const tooSimilar = unique.some(u => {
-      const inter = s.numbers.filter(x => u.numbers.includes(x)).length;
-      return inter >= penaltyThreshold;
-    });
-    if (!tooSimilar) unique.push(s);
-    else unique.push(s); // 현 구조 유지(페널티 정책 확장 여지)
-  }
-  return unique;
-}
-
-// ---------- 메인 API ----------
-function generatePredictions(userOptions = {}) {
-  const options = { ...DEFAULT_OPTIONS, ...userOptions };
-  const rawHistory = Array.isArray(userOptions.history) ? userOptions.history : [];
-
-  // 1) 회차 기준 "이전 N회" 윈도우 산정
-  const { effectiveHistory, windowInfo } = computeEffectiveHistory(rawHistory, options);
-
-  // 2) 후보 풀/가중치 계산은 항상 '윈도우된' 히스토리를 사용
-  const { pool, finalWeights } = buildCandidatePool(effectiveHistory, options);
-
-  // 3) 난수 시드
-  const rand = options.seed != null
-    ? mulberry32(options.seed)
-    : mulberry32((Date.now() ^ (Math.random() * 0xFFFFFFFF)) >>> 0);
-
-  // 4) 세트 생성 (최근 N회 배제 로직도 '윈도우된' 히스토리에 맞춤)
-  const sets = [];
-  for (let i = 0; i < options.setCount; i++) {
-    sets.push(generateOneSet(pool, finalWeights, options, effectiveHistory, rand));
-  }
-
-  const diversified = diversify(sets, options.kSetting === 10 ? 4 : 3);
-
-  return {
-    options,
-    windowInfo,           // ➜ 디버깅/검증용: 실제로 어떤 구간이 사용되었는지 확인 가능
-    sets: diversified,
-    candidatePool: pool
-  };
-}
-
 
 module.exports = {
-  syncLatest,
-  generatePredictions,
-  buildCandidatePool
+  syncLatest
 };

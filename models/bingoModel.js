@@ -9,7 +9,7 @@ async function getList(limit = 99999, offset = 0) {
     const total = totalResult ? totalResult.cnt : 0;
     return { rows, total };
   } catch (error) {
-    console.error('getList error:', error);
+    LOG.err('getList error:', error);
     throw error;
   }
 }
@@ -19,7 +19,7 @@ async function getOne(seq) {
     const row = await execGet(BingoQueries.getOne, [seq]);
     return row || null;
   } catch (error) {
-    console.error('getOne error:', error);
+    LOG.err('getOne error:', error);
     throw error;
   }
 }
@@ -29,7 +29,7 @@ async function getRecent(rounds) {
     const rows = await execAll(BingoQueries.getRecent, [rounds]);
     return rows;
   } catch (error) {
-    console.error('getRecent error:', error);
+    LOG.err('getRecent error:', error);
     throw error;
   }
 }
@@ -39,7 +39,7 @@ async function getCount(rounds) {
     const rows = await execGet(BingoQueries.getCount, [rounds]);
     return rows;
   } catch (error) {
-    console.error('getRecent error:', error);
+    LOG.err('getRecent error:', error);
     throw error;
   }
 }
@@ -49,17 +49,23 @@ async function getMaxSeq() {
     const row = await execGet(BingoQueries.getMaxSeq, );
     return row || null;
   } catch (error) {
-    console.error('getOne error:', error);
+    LOG.err('getOne error:', error);
     throw error;
   }
 }
 
+const LOG = {
+  err: (...args) => console.error('[model:err]', ...args),
+  info: (...args) => console.log('[model:info]', ...args)
+};
+
 async function setUpsert(seq, row) {
   try {
-    await execRun(BingoQueries.setUpsert, Object.values(row));
+    const params = [seq, row.no1, row.no2, row.no3, row.no4, row.no5, row.no6, row.no7];
+    await execRun(BingoQueries.setUpsert, params);
     return true;
   } catch (error) {
-    console.error('setUpsert error:', error);
+    LOG.err('setUpsert error:', error);
     throw error;
   }
 }
@@ -70,7 +76,7 @@ async function setUpdate(seq, row) {
     const result = await execRun(BingoQueries.setUpdate, params);
     return result.changes > 0;
   } catch (error) {
-    console.error('setUpdate error:', error);
+    LOG.err('setUpdate error:', error);
     throw error;
   }
 }
@@ -80,7 +86,7 @@ async function setDelete(seq) {
     const result = await execRun(BingoQueries.setDelete, [seq]);
     return result.changes > 0;
   } catch (error) {
-    console.error('setDelete error:', error);
+    LOG.err('setDelete error:', error);
     throw error;
   }
 }

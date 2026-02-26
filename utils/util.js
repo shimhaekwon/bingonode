@@ -1,4 +1,11 @@
 // ./utils/util.js
+const LOG = {
+  dbg: (...args) => console.log(...args),
+  info: (...args) => console.info(...args),
+  warn: (...args) => console.warn(...args),
+  err: (...args) => console.error(...args)
+};
+
 const util = {
   /**
    * 간단 메서드 로거
@@ -15,14 +22,14 @@ const util = {
         // stack[2] = logWithCaller를 호출한 위치
         const callerInfo = stack[2].trim();
 
-        console.log(`Current Method:[${callerInfo}], request.body:[${req&&req.body?JSON.stringify(req.body):"req is undefined"}]`);
+        LOG.dbg(`Current Method:[${callerInfo}], request.body:[${req&&req.body?JSON.stringify(req.body):"req is undefined"}]`);
 
     //   // 공통 태그 출력
-    //   console.log('Current Method :', tag);
+    //   LOG.dbg('Current Method :', tag);
 
       // req가 없으면 안전하게 종료
       if (!req) {
-        console.log('REQ BODY: unknown (req is undefined)');
+        console.error('REQ BODY: unknown (req is undefined)');
         return;
       }
 
@@ -32,17 +39,17 @@ const util = {
       const hasParams = req.params && Object.keys(req.params).length > 0;
 
       if (hasBody) {
-        console.log('REQ BODY:', req.body);
+        LOG.dbg('REQ BODY:', req.body);
       } else {
-        console.log('REQ BODY: (empty or undefined)');
+        LOG.dbg('REQ BODY: (empty or undefined)');
       }
 
       if (hasQuery) {
-        console.log('REQ QUERY:', req.query);
+        LOG.dbg('REQ QUERY:', req.query);
       }
 
       if (hasParams) {
-        console.log('REQ PARAMS:', req.params);
+        LOG.dbg('REQ PARAMS:', req.params);
       }
     } catch (err) {
       // 로깅 중 오류가 서비스 흐름을 막지 않도록

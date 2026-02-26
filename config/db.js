@@ -3,6 +3,11 @@ const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 require('dotenv').config();
 
+const LOG = {
+  err: (...args) => console.error('[db:err]', ...args),
+  info: (...args) => console.log('[db:info]', ...args)
+};
+
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db');
 const db = new sqlite3.Database(DB_PATH);
 
@@ -11,8 +16,8 @@ function execAll(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.all(sql, params, function(err, rows) {  // ← function 사용 (arrow function 아님)
       if (err) {
-        console.error('execGet SQL:', sql);
-        console.error('execAll error:', err.message);
+        LOG.err('execGet SQL:', sql);
+        LOG.err('execAll error:', err.message);
         return reject(err);
       }else {        
         console.log('execGet SQL:', sql);
@@ -26,8 +31,8 @@ function execGet(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.get(sql, params, function(err, row) {  // ← function 사용
       if (err) {
-        console.error('execGet SQL:', sql);
-        console.error('execGet error:', err.message);
+        LOG.err('execGet SQL:', sql);
+        LOG.err('execGet error:', err.message);
         return reject(err);
       }else {        
         console.log('execGet SQL:', sql);
@@ -41,8 +46,8 @@ function execRun(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function(err) {  // ← function 사용 (this 사용)
       if (err) {
-        console.error('execGet SQL:', sql);
-        console.error('execRun error:', err.message);
+        LOG.err('execGet SQL:', sql);
+        LOG.err('execRun error:', err.message);
         return reject(err);
       }else {        
         console.log('execGet SQL:', sql);

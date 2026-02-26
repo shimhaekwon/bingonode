@@ -47,6 +47,7 @@ const bingoController = {
 
   postSync: async (req, res) => {
     try {
+      util?.methodLog?.("call service [bingoService.syncLatest]");
       const result = await bingoService.syncLatest();
       // 202 Accepted (비동기 작업 개시/진행) or 200 OK (즉시 완료) 중 택1
       // 여기서는 항상 202로 응답(프론트는 비동기 진행으로 이해)

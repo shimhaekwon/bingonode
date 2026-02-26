@@ -309,7 +309,30 @@
       setsHost.appendChild(title);
       sets.forEach((arr,i)=>{
         const line = document.createElement('div'); line.className="set-line";
-        line.innerHTML = `세트 ${i+1}: <span class="nums">${arr.map(n=>`<span class="chip ${lottoColorClass(n,'chip')}">${n}</span>`).join("")}</span>`;
+        
+        // 각 번호가 당첨번호/보너스와 일치하는지 확인
+        const numsHtml = arr.map(n => {
+          let chipClass = lottoColorClass(n, 'chip');
+          let extraClass = '';
+          let label = '';
+          
+          if (applyNums.includes(n)) {
+            extraClass = ' match-win';
+            label = ' ✓';
+          } else if (applyBonus === n) {
+            extraClass = ' match-bonus';
+            label = ' ★';
+          }
+          
+          return `<span class="chip ${chipClass}${extraClass}">${n}${label}</span>`;
+        }).join("");
+        
+        // 세트별 매칭 통계
+        const matchCount = arr.filter(n => applyNums.includes(n)).length;
+        const bonusMatch = arr.includes(applyBonus) ? 1 : 0;
+        const stats = ` <span class="set-stats">[${matchCount}+${bonusMatch}]</span>`;
+        
+        line.innerHTML = `세트 ${i+1}: <span class="nums">${numsHtml}</span>${stats}`;
         setsHost.appendChild(line);
       });
 
@@ -325,7 +348,7 @@
 
       appendLog("완료!", "ok");
     } catch (e) {
-      console.error(e);
+      LOG.err(e);
       appendLog("서버 예측 실패: " + (e?.message || e), "err");
     }
   }
@@ -360,7 +383,7 @@
       if (!el.applyRound.value) el.applyRound.value = ROUND_MAX; // 최신 회차 기본 선택
       renderDataViewer(); // ✅ 모든 회차 표출
     }catch(err){
-      console.error(err);
+      LOG.err(err);
       appendLog("초기 데이터 로드 실패(서버). 필요 시 붙여넣기로 대체하세요.", "err");
     }
 
@@ -401,7 +424,7 @@
         renderAll();
         appendLog(`붙여넣기 완료: ${out.length}행 (서버 예측에는 반영되지 않습니다)`, "warn");
       } catch (e) {
-        console.error(e);
+        LOG.err(e);
         appendLog("붙여넣기 처리 실패", "err");
       }
     });
@@ -472,7 +495,7 @@ document.addEventListener('numChosen:ready', () => {
     if (!el.applyRound.value) el.applyRound.value = ROUND_MAX;
     renderDataViewer();
   } catch (err) {
-    console.error(err);
+    LOG.err(err);
     appendLog("초기 렌더링 실패", "err");
   }
 });

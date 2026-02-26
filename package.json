@@ -16,8 +16,9 @@
   },
   "scripts": {
     "start": "node ./bin/www",
-    "dev": "cross-env NODE_ENV=development node ./bin/www",
-    "prod": "cross-env NODE_ENV=production node ./bin/www"
+    "dev": "cross-env NODE_ENV=development DEBUG_SYNC=1 node ./bin/www",
+    "debug": "cross-env NODE_ENV=development DEBUG_SYNC=1 node --inspect-brk ./bin/www",
+    "prod": "cross-env NODE_ENV=production DEBUG_SYNC=0 node ./bin/www"
   },
   "dependencies": {
     "audit": "^0.0.6",

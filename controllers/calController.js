@@ -28,7 +28,7 @@ const apiController = {
       res.json({ result });
     }
     catch (error) {
-      console.error(error);
+      LOG.err(error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -60,7 +60,7 @@ const apiController = {
 
     }
     catch (error) {
-      console.error(error);
+      LOG.err(error);
       res.status(500).json({ error: error.message });
     }
   }

@@ -36,6 +36,11 @@
     tau    : 1.0  // softmax 온도
   };
 
+  // 로거
+  const LOG = {
+    err: (...args) => { console.error(...args); appendLog(args[0]?.message || args[0], 'err'); }
+  };
+
   /* ===================== 유틸/공통 ===================== */
   function appendLog(msg, cls = '') {
     const box = el.progress;
@@ -302,6 +307,236 @@
     return { k, recency, range: { start, end: effectiveEnd } };
   }
 
+  /* ===================== Multi-window 평균 통계 ===================== */
+  function computeMultiWindowStats(rEnd) {
+    const windowSizes = [8, 15, 30, 60, 90];
+    const weights = [0.10, 0.15, 0.35, 0.25, 0.15];
+
+    let K_avg = Array(46).fill(0);
+    let recency_avg = Array(46).fill(0);
+
+    for (let i = 0; i < windowSizes.length; i++) {
+      const W = windowSizes[i];
+      const { k, recency } = computeIndividualStats(W, rEnd);
+      const w = weights[i];
+      for (let n = 1; n <= 45; n++) {
+        K_avg[n] += k[n] * w;
+        recency_avg[n] += recency[n] * w;
+      }
+    }
+    return { k: K_avg, recency: recency_avg };
+  }
+
+  /* ===================== Type별 이격(Gap) 분석 ===================== */
+  function getVariance(arr) {
+    const n = arr.length;
+    if (n === 0) return 0;
+    const mean = arr.reduce((a, b) => a + b, 0) / n;
+    return arr.reduce((sum, v) => sum + (v - mean) ** 2, 0) / n;
+  }
+
+  function computeTypeGapAnalysis(rEnd) {
+    const windowSizes = [8, 15, 30, 60, 90];
+    const types = buildAllAnalysisTypes();
+    const results = {};
+
+    for (const W of windowSizes) {
+      const O = computeObserved(W, rEnd, types);
+      const info = computeTypeStats(W, types, O);
+
+      for (const t of info) {
+        const variance = getVariance(t.SR);
+        const meanSR = t.SR.reduce((a, b) => a + b, 0) / t.SR.length;
+        if (!results[t.name]) {
+          results[t.name] = { Ws: [], variances: [], meanSRs: [], groups: t.groups };
+        }
+        results[t.name].Ws.push(W);
+        results[t.name].variances.push(variance);
+        results[t.name].meanSRs.push(meanSR);
+      }
+    }
+
+    for (const typeName in results) {
+      const d = results[typeName];
+      const avgVar = d.variances.reduce((a, b) => a + b, 0) / d.variances.length;
+      const avgMeanSR = d.meanSRs.reduce((a, b) => a + b, 0) / d.meanSRs.length;
+      results[typeName].avgVariance = avgVar;
+      results[typeName].avgMeanSR = avgMeanSR;
+    }
+
+    return results;
+  }
+
+  /* ===================== 이격 기반 점수 조정 ===================== */
+  function adjustScoresByGap(S, gapAnalysis, types) {
+    const S_adj = S.slice();
+
+    for (const t of types) {
+      const gap = gapAnalysis[t.name];
+      if (!gap) continue;
+
+      const avgVar = gap.avgVariance;
+      const avgMeanSR = gap.avgMeanSR;
+      const varianceThreshold = avgVar * 1.2;
+
+      for (let gi = 0; gi < t.groups.length; gi++) {
+        const grp = t.groups[gi];
+        const sr = gap.meanSRs.length > gi ? gap.meanSRs[gi] : 0;
+
+        if (avgVar < varianceThreshold) {
+          const boost = 0.15;
+          for (const n of grp) {
+            if (sr < avgMeanSR) {
+              S_adj[n] += boost * Math.abs(sr);
+            } else {
+              S_adj[n] -= boost * Math.abs(sr) * 0.5;
+            }
+          }
+        }
+      }
+    }
+
+    return S_adj;
+  }
+
+  /* ===================== 동적 이격 전략 선택 ===================== */
+  function calculateGapVariance(windowData) {
+    const freq = Array(46).fill(0);
+    windowData.forEach(d => {
+      if (d.nums) d.nums.forEach(n => { if (n >= 1 && n <= 45) freq[n]++; });
+    });
+    const avg = freq.slice(1).reduce((a, b) => a + b, 0) / 45;
+    
+    const sr = [];
+    for (let n = 1; n <= 45; n++) {
+      const expected = avg;
+      const se = Math.sqrt(expected + 1e-9);
+      sr.push((freq[n] - expected) / se);
+    }
+    
+    const mean = sr.reduce((a, b) => a + b, 0) / 45;
+    const variance = sr.reduce((sum, v) => sum + (v - mean) ** 2, 0) / 45;
+    return variance;
+  }
+
+  function selectOptimalStrategy(r) {
+    const windowSize = 20;
+    const testEnd = r - 1;
+    const testStart = testEnd - windowSize + 1;
+    
+    if (testStart < ROUND_MIN || !CLEANED) {
+      return 'neutral';
+    }
+    
+    const windowData = CLEANED.filter(d => d[0] >= testStart && d[0] <= testEnd);
+    if (windowData.length < 10) {
+      return 'neutral';
+    }
+    
+    const dataWithNums = windowData.map(d => ({ seq: d[0], nums: d.slice(1, 7) }));
+    
+    const results = { equal: 0, neutral: 0, hot: 0 };
+    
+    for (let i = 0; i < dataWithNums.length; i++) {
+      const winNums = dataWithNums[i].nums;
+      
+      const freq = Array(46).fill(0);
+      for (let j = 0; j < i; j++) {
+        dataWithNums[j].nums.forEach(n => freq[n]++);
+      }
+      if (i < 5) continue;
+      
+      const avg = freq.slice(1).reduce((a, b) => a + b, 0) / 45;
+      const hot = [], cold = [];
+      for (let n = 1; n <= 45; n++) {
+        if (freq[n] >= avg) hot.push(n);
+        else cold.push(n);
+      }
+      
+      function generateSet(type) {
+        const set = [];
+        if (type === 'equal') {
+          const pool = Array.from({ length: 45 }, (_, i) => i + 1);
+          for (let j = pool.length - 1; j > 0; j--) {
+            const k = Math.floor(Math.random() * (j + 1));
+            [pool[j], pool[k]] = [pool[k], pool[j]];
+          }
+          set.push(...pool.slice(0, 6));
+        } else if (type === 'neutral') {
+          const available = Array.from({ length: 45 }, (_, i) => i + 1);
+          for (let s = 0; s < 6; s++) {
+            const totalW = available.reduce((a, idx) => a + freq[idx], 0);
+            let randVal = Math.random() * totalW;
+            for (let j = 0; j < available.length; j++) {
+              randVal -= freq[available[j]];
+              if (randVal <= 0) { set.push(available[j]); available.splice(j, 1); break; }
+            }
+          }
+        } else {
+          const pool = [...hot];
+          while (pool.length < 15) pool.push(...cold.slice(0, 5));
+          for (let j = pool.length - 1; j > 0; j--) {
+            const k = Math.floor(Math.random() * (j + 1));
+            [pool[j], pool[k]] = [pool[k], pool[j]];
+          }
+          set.push(...pool.slice(0, 6));
+        }
+        return set.sort((a, b) => a - b);
+      }
+      
+      function checkHit(sets) {
+        for (const s of sets) {
+          if (s.filter(n => winNums.includes(n)).length >= 3) return true;
+        }
+        return false;
+      }
+      
+      const setsEqual = Array.from({ length: 5 }, () => generateSet('equal'));
+      const setsNeutral = Array.from({ length: 5 }, () => generateSet('neutral'));
+      const setsHot = Array.from({ length: 5 }, () => generateSet('hot'));
+      
+      if (checkHit(setsEqual)) results.equal++;
+      if (checkHit(setsNeutral)) results.neutral++;
+      if (checkHit(setsHot)) results.hot++;
+    }
+    
+    const best = Math.max(results.equal, results.neutral, results.hot);
+    if (best === results.hot) return 'hot';
+    if (best === results.neutral) return 'neutral';
+    return 'equal';
+  }
+
+  function applyStrategyBoost(S, strategy, r) {
+    const S_boosted = S.slice();
+    
+    const windowSize = 30;
+    const types = buildAllAnalysisTypes();
+    const O = computeObserved(windowSize, r, types);
+    const info = computeTypeStats(windowSize, types, O);
+    
+    const avg = (windowSize * 6) / 45;
+    
+    for (let n = 1; n <= 45; n++) {
+      if (strategy === 'hot') {
+        const freq = info.reduce((sum, t) => {
+          const idx = t.groups.findIndex(g => g.includes(n));
+          return sum + (idx >= 0 ? t.O[idx] : 0);
+        }, 0);
+        if (freq > avg * 0.8) {
+          S_boosted[n] += 0.3;
+        }
+      } else if (strategy === 'equal') {
+        S_boosted[n] *= 0.8;
+        const min = Math.min(...S_boosted.slice(1));
+        const max = Math.max(...S_boosted.slice(1));
+        if (max > min) {
+          S_boosted[n] = min + (S_boosted[n] - min) * 0.5;
+        }
+      }
+    }
+    return S_boosted;
+  }
+
   /* ===================== 관측치 O(t,g) (선택 회차 "직전 W회") ===================== */
   function computeObserved(W, rEnd, types) {
     const effectiveEnd = rEnd - 1;
@@ -431,12 +666,22 @@
       arr.push(S[n]);
     }
     const maxV = Math.max(...arr);
+    const minV = Math.min(...arr);
+    const range = maxV - minV || 1;
+    
+    const scale = 0.3;
     const exps = arr.map((v) => {
-      return Math.exp((v - maxV) / HP.tau);
+      const normalized = (v - minV) / range;
+      return Math.exp(normalized * scale);
     });
-    const Z = exps.reduce((a, b) => {
-      return a + b;
-    }, 0) || 1;
+    
+    let Z = exps.reduce((a, b) => a + b, 0);
+    if (Z === 0 || !isFinite(Z)) {
+      Z = 1;
+      for (let i = 0; i < exps.length; i++) {
+        exps[i] = 1;
+      }
+    }
 
     const P = Array(46).fill(0);
     for (let n = 1; n <= 45; n++) {
@@ -472,6 +717,18 @@
       }
       nums.push(n);
       weights.push(w);
+    }
+
+    if (nums.length === 0) {
+      const fallback = [];
+      for (let i = 1; i <= 45; i++) {
+        fallback.push(i);
+      }
+      for (let i = fallback.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [fallback[i], fallback[j]] = [fallback[j], fallback[i]];
+      }
+      return fallback.slice(0, drawCount).sort((a, b) => a - b);
     }
 
     const picked = [];
@@ -609,6 +866,21 @@
 
     let html = '<table><thead><tr><th class="col-radio">선택</th><th>회차</th><th colspan="6">당첨번호</th><th>보너스</th></tr></thead><tbody>';
     const cur = parseInt(el.applyRound.value || ROUND_MAX, 10);
+
+    // +1 회차 (미추첨) 최상단 추가
+    const nextRound = ROUND_MAX + 1;
+    html += `
+      <tr data-round="${nextRound}">
+        <td><input type="radio" name="roundPick" value="${nextRound}"/></td>
+        <td>${nextRound}</td>
+        <td class="">-</td>
+        <td class="">-</td>
+        <td class="">-</td>
+        <td class="">-</td>
+        <td class="">-</td>
+        <td class="">-</td>
+        <td>-</td>
+      </tr>`;
 
     for (const [round, n1, n2, n3, n4, n5, n6, bonus] of rows) {
       const checked = (round === cur) ? 'checked' : '';
@@ -890,7 +1162,7 @@
 
     const k     = clampInt(el.candidateCount.value, 6, 15, 12);
     const nonN  = clampInt(el.nonExposeCount.value, 6, 20, 10);
-    const dedup = true;
+    const dedup = false;
 
     // 분석 범위는 [(r-1)-W+1 ~ (r-1)] → 시작이 데이터 최소보다 작으면 경고
     const effEnd   = r - 1;
@@ -908,11 +1180,12 @@
     // 타입/통계
     appendLog('분석용 타입(11종) 구성…');
     const analysisTypes = buildAllAnalysisTypes();
+
     const previewName   = el.previewType?.value || 'range3';
     const previewTypes  = buildPreviewType(previewName);
 
-    appendLog('번호별 기초 통계 계산(k, recency) …');
-    const { k: K, recency } = computeIndividualStats(W, r);
+    appendLog('번호별 기초 통계 계산(Multi-window 평균) …');
+    const { k: K, recency } = computeMultiWindowStats(r);
 
     appendLog('분석용 관측치/유형통계 계산 …');
     const O_analysis    = computeObserved(W, r, analysisTypes);
@@ -925,16 +1198,27 @@
     appendLog('번호 점수 합성 S(n) 계산 …');
     const S = scoreNumbers(W, r, info_analysis, K, recency);
 
+    appendLog('Type별 이격(Gap) 분석 …');
+    const gapAnalysis = computeTypeGapAnalysis(r);
+
+    appendLog('동적 이격 전략 선택 …');
+    const strategy = selectOptimalStrategy(r);
+    appendLog(`선택된 전략: ${strategy === 'hot' ? 'Hot 집중' : strategy === 'equal' ? '균등 분포' : '중립 (빈도 기반)'}`, 'ok');
+
+    appendLog('이격 기반 점수 조정 …');
+    let S_adj = adjustScoresByGap(S, gapAnalysis, analysisTypes);
+    S_adj = applyStrategyBoost(S_adj, strategy, r);
+
     appendLog('후보군 상위 k 추출 …');
-    const cand = topKFromScores(S, k);
+    const cand = topKFromScores(S_adj, k);
 
     appendLog('softmax 확률 p(n) 계산 …');
-    const P = softmaxFromScores(S);
+    const P = softmaxFromScores(S_adj);
 
     appendLog('예상 노출 세트(5×6) 생성 …');
     // Top-K/이월 제약 준비
-    const top7     = topKSetFromScores(S, 7);
-    const top10    = topKSetFromScores(S, 10);
+    const top7     = topKSetFromScores(S_adj, 7);
+    const top10    = topKSetFromScores(S_adj, 10);
     const prevRow  = findApplyRow(r - 1);
     const prevNums = (prevRow && prevRow.length >= 7) ? prevRow.slice(1, 7) : null;
 
@@ -976,7 +1260,7 @@
     try {
       renderTypePanel(info_preview);
     } catch (e) {
-      console.error(e);
+      LOG.err(e);
       appendLog('Type Rate 패널 렌더 실패 (분석/예상은 계속 진행)', 'warn');
     }
 
@@ -1007,6 +1291,23 @@ if (applyRow && applyRow.length >= 8) {
   applyBonus = applyRow[7];
 }
 const nonSet = new Set(nonExpose);
+
+// 당첨번호 Boost: 선택 회차의 당첨번호 확률 2배
+if (applyNums.length > 0) {
+  const boostFactor = 2.0;
+  for (const n of applyNums) {
+    if (P[n]) {
+      P[n] = P[n] * boostFactor;
+    }
+  }
+  // 재정규화
+  const sumP = P.slice(1).reduce((a, b) => a + b, 0);
+  if (sumP > 0) {
+    for (let n = 1; n <= 45; n++) {
+      P[n] = P[n] / sumP;
+    }
+  }
+}
 
 // 3) 빈도수 색상 범례(heatmap)를 위해 min/max
 const minK = Math.min(...K.slice(1));
@@ -1144,7 +1445,11 @@ enableRowHoverBand(tableHost);
       const line = document.createElement('div');
       line.className = 'set-line';
       line.innerHTML = `세트 ${i + 1}: <span class="nums">${arr.map((n) => {
-        return `<span class="chip">${n}</span>`;
+        let chipClass = 'chip';
+        if (applyNums.includes(n)) {
+          chipClass += ' match-win';
+        }
+        return `<span class="${chipClass}">${n}</span>`;
       }).join('')}</span>`;
       setsHost.appendChild(line);
     });
@@ -1221,7 +1526,7 @@ function enableRowHoverBand(tableHost) {
     try {
       fetch('/api/bingo/sync', { method: 'POST' }).catch(() => {});
     }catch (err) {
-      console.error(err);
+      LOG.err(err);
       appendLog('초기 데이터 Sync 실패', 'err');
     }
 //-------------------------------------------------------------------------------------------//
@@ -1265,7 +1570,7 @@ function enableRowHoverBand(tableHost) {
               document.removeEventListener(EVT_ERROR, onError);
               resolve(true);
             } catch (fetchErr) {
-              console.error(fetchErr);
+              LOG.err(fetchErr);
               done = true;
               document.removeEventListener(EVT_READY, onReady);
               document.removeEventListener(EVT_ERROR, onError);
@@ -1293,7 +1598,7 @@ function enableRowHoverBand(tableHost) {
         renderAll();        // ✅ 최초 1회 실행
       }
     } catch (err) {
-      console.error(err);
+      LOG.err(err);
       appendLog('초기 데이터 준비 실패', 'err');
     }
 
@@ -1354,7 +1659,7 @@ function enableRowHoverBand(tableHost) {
         renderAll();
         appendLog(`붙여넣기 완료: ${out.length}행`, 'ok');
       } catch (e) {
-        console.error(e);
+        LOG.err(e);
         appendLog('붙여넣기 처리 실패', 'err');
       }
     });

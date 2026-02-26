@@ -13,8 +13,8 @@ export const BingoQueries = {
   getCount: `SELECT COUNT(*) AS cnt FROM tb_bingo`,
   getMaxSeq: `SELECT MAX(seq) as maxeq FROM tb_bingo`,
   setUpsert: `
-    INSERT INTO tb_bingo (seq, no1, no2, no3, no4, no5, no6, no7,updated_at)
-    VALUES (@seq, @no1, @no2, @no3, @no4, @no5, @no6, @no7, current_timestamp)
+    INSERT INTO tb_bingo (seq, no1, no2, no3, no4, no5, no6, no7)
+    VALUES (@seq, @no1, @no2, @no3, @no4, @no5, @no6, @no7)
     ON CONFLICT(seq) 
     DO UPDATE SET no1=@no1, no2=@no2, no3=@no3, no4=@no4, no5=@no5, no6=@no6, no7=@no7
   `,

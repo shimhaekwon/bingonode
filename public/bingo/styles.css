@@ -194,6 +194,32 @@ td.col-hover, th.col-hover {
   background: #fff; box-shadow: var(--shadow);
 }
 
+/* 당첨번호 매칭 스타일 */
+.sets .chip.match-win {
+  background: #4CAF50 !important;
+  color: #fff !important;
+  border: 2px solid #2E7D32 !important;
+  font-weight: 900;
+  box-shadow: 0 0 6px rgba(76, 175, 80, 0.6);
+}
+
+/* 보너스번호 매칭 스타일 */
+.sets .chip.match-bonus {
+  background: #9C27B0 !important;
+  color: #fff !important;
+  border: 2px solid #7B1FA2 !important;
+  font-weight: 900;
+  box-shadow: 0 0 6px rgba(156, 39, 176, 0.6);
+}
+
+/* 세트별 매칭 통계 */
+.sets .set-stats {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #616161;
+  font-weight: 600;
+}
+
 /* ========= 레전드 & 진행/안내 ========= */
 .legend {
   padding: 6px 16px 0 16px;
@@ -207,6 +233,20 @@ td.col-hover, th.col-hover {
   display: inline-block; width: 24px; height: 10px;
   background: linear-gradient(transparent 0%, rgba(255,235,59,.25) 0%, rgba(255,235,59,.25) 100%);
   outline: 1px dashed rgba(0,0,0,.15);
+}
+
+/* 레전드: 당첨/보너스 매칭 표시 */
+.legend-chip-win {
+  display: inline-block; width: 20px; height: 20px;
+  background: #4CAF50; color: #fff;
+  border-radius: 50%; font-size: 10px; font-weight: bold;
+  text-align: center; line-height: 20px;
+}
+.legend-chip-bonus {
+  display: inline-block; width: 20px; height: 20px;
+  background: #9C27B0; color: #fff;
+  border-radius: 50%; font-size: 10px; font-weight: bold;
+  text-align: center; line-height: 20px;
 }
 .progress {
   margin: 8px 16px; padding: 8px 12px;

@@ -166,7 +166,7 @@ function autoLoadRoutes(dir) {
 
       console.warn(`[route-loader] Skipped ${fullPath} (no router/basePath found)`);
     } catch (err) {
-      console.error(`[route-loader] Error loading ${fullPath}:`, err.message);
+      LOG.err(`[route-loader] Error loading ${fullPath}:`, err.message);
     }
   });
 }
