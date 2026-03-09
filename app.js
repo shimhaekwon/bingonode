@@ -57,6 +57,7 @@ require('dotenv').config();
 //const isDev = req.app.get('env') === 'development';
 const isDev = process.env.NODE_ENV === 'development';
 console.log('Current Environment:',process.env.NODE_ENV);
+console.log('Current Environment:',process.env.port);
 
 // error handler
 app.use(function(err, req, res, next) {
