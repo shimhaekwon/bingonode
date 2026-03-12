@@ -86,8 +86,9 @@
     if (n < ROUND_MIN) {
       return ROUND_MIN;
     }
-    if (n > ROUND_MAX) {
-      return ROUND_MAX;
+    // ROUND_MAX + 1 (미추첨 회차)까지는 허용하도록 수정
+    if (n > ROUND_MAX + 1) {
+      return ROUND_MAX + 1;
     }
     return n;
   }
@@ -1158,6 +1159,7 @@
     const W    = clampInt(el.totalRounds.value, 1, 180, 30);
     const rIn  = parseInt(el.applyRound.value || ROUND_MAX, 10);
     const r    = Number.isFinite(rIn) ? clampRound(rIn) : ROUND_MAX;
+    console.log(`[Debug renderAll] raw rIn: ${rIn}, clamped r: ${r}, ROUND_MAX: ${ROUND_MAX}`);
     el.applyRound.value = r;
 
     const k     = clampInt(el.candidateCount.value, 6, 15, 12);
@@ -1284,12 +1286,14 @@ html += `
 
 // 2) 필요한 컨텍스트(적용 회차의 당첨/보너스, 후보/미노출 집합)
 const applyRow = findApplyRow(r);
+console.log(`[Debug applyRow] Searching for r: ${r}, Found:`, applyRow);
 let applyNums = [];
 let applyBonus = null;
 if (applyRow && applyRow.length >= 8) {
   applyNums  = applyRow.slice(1, 7);
   applyBonus = applyRow[7];
 }
+console.log(`[Selection] Round: ${r}, applyNums:`, applyNums);
 const nonSet = new Set(nonExpose);
 
 // 당첨번호 Boost: 선택 회차의 당첨번호 확률 2배
@@ -1446,13 +1450,83 @@ enableRowHoverBand(tableHost);
       line.className = 'set-line';
       line.innerHTML = `세트 ${i + 1}: <span class="nums">${arr.map((n) => {
         let chipClass = 'chip';
-        if (applyNums.includes(n)) {
+        if (applyNums.includes(n) && applyNums.some(num => num > 0) && r <= ROUND_MAX) {
           chipClass += ' match-win';
         }
         return `<span class="${chipClass}">${n}</span>`;
       }).join('')}</span>`;
       setsHost.appendChild(line);
     });
+
+    // === 중복 데이터 ===
+    const dupLabel = document.createElement('div');
+    dupLabel.className = 'set-line';
+    dupLabel.style.marginTop = '16px';
+    dupLabel.style.color = '#757575';
+    dupLabel.textContent = '중복 데이터';
+    setsHost.appendChild(dupLabel);
+
+    // === 2/3/4/5회 추출된 번호 ===
+    const allNums = sets.flat();
+    const freq = Array(46).fill(0);
+    allNums.forEach(n => freq[n]++);
+
+    const repeated1 = [], repeated2 = [], repeated3 = [], repeated4 = [], repeated5 = [];
+    for (let n = 1; n <= 45; n++) {
+      const cnt = freq[n];
+      if (cnt === 5) repeated5.push(n);
+      else if (cnt === 4) repeated4.push(n);
+      else if (cnt === 3) repeated3.push(n);
+      else if (cnt === 2) repeated2.push(n);
+      else if (cnt === 1) repeated1.push(n);
+    }
+
+    if (repeated1.length > 0) {
+      const repeatedDiv = document.createElement('div');
+      repeatedDiv.className = 'set-line';
+      repeatedDiv.style.marginTop = '12px';
+      repeatedDiv.innerHTML = `<b>1회</b>: <span class="nums">${repeated1.map(n =>
+        `<span class="chip">${n}</span>`
+      ).join(' ')}</span>`;
+      setsHost.appendChild(repeatedDiv);
+    }
+
+    if (repeated2.length > 0) {
+      const repeatedDiv = document.createElement('div');
+      repeatedDiv.className = 'set-line';
+      repeatedDiv.style.marginTop = '12px';
+      repeatedDiv.innerHTML = `<b>2회</b>: <span class="nums">${repeated2.map(n =>
+        `<span class="chip">${n}</span>`
+      ).join(' ')}</span>`;
+      setsHost.appendChild(repeatedDiv);
+    }
+
+    if (repeated3.length > 0) {
+      const repeatedDiv = document.createElement('div');
+      repeatedDiv.className = 'set-line';
+      repeatedDiv.innerHTML = `<b>3회</b>: <span class="nums">${repeated3.map(n =>
+        `<span class="chip">${n}</span>`
+      ).join(' ')}</span>`;
+      setsHost.appendChild(repeatedDiv);
+    }
+
+    if (repeated4.length > 0) {
+      const repeatedDiv = document.createElement('div');
+      repeatedDiv.className = 'set-line';
+      repeatedDiv.innerHTML = `<b>4회</b>: <span class="nums">${repeated4.map(n =>
+        `<span class="chip">${n}</span>`
+      ).join(' ')}</span>`;
+      setsHost.appendChild(repeatedDiv);
+    }
+
+    if (repeated5.length > 0) {
+      const repeatedDiv = document.createElement('div');
+      repeatedDiv.className = 'set-line';
+      repeatedDiv.innerHTML = `<b>5회</b>: <span class="nums">${repeated5.map(n =>
+        `<span class="chip">${n}</span>`
+      ).join(' ')}</span>`;
+      setsHost.appendChild(repeatedDiv);
+    }
 
     appendLog('완료!', 'ok');
   }
@@ -1732,6 +1806,7 @@ function enableRowHoverBand(tableHost) {
       }
       dragging = false;
       document.body.style.cursor = '';
+      document.body.style.overflow = '';
 
       const nh = parseFloat(getComputedStyle(inner).maxHeight);
       if (Number.isFinite(nh)) {
@@ -1739,10 +1814,38 @@ function enableRowHoverBand(tableHost) {
       }
     };
 
+    const onTouchMove = (e) => {
+      if (!dragging) {
+        return;
+      }
+      const touch = e.touches[0];
+      const nh = Math.max(MIN_H, sh + (touch.clientY - sy));
+      inner.style.maxHeight = nh + 'px';
+      e.preventDefault();
+    };
+
     window.addEventListener('mousemove', (e) => {
       onMove(e);
     });
     window.addEventListener('mouseup', () => {
+      onUp();
+    });
+
+    // 모바일 터치 이벤트
+    handle.addEventListener('touchstart', (e) => {
+      dragging = true;
+      sy = e.touches[0].clientY;
+      const cs = getComputedStyle(inner);
+      sh = parseFloat(cs.maxHeight);
+      if (!Number.isFinite(sh)) {
+        sh = inner.offsetHeight;
+      }
+      document.body.style.overflow = 'hidden';
+      e.preventDefault();
+    }, { passive: false });
+
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', () => {
       onUp();
     });
   });

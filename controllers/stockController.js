@@ -4,6 +4,21 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { spawn } = require('child_process');
 
+// Helper function to get timestamp with microseconds
+function getTimestamp() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    const second = String(now.getSeconds()).padStart(2, '0');
+    const millisecond = String(now.getMilliseconds()).padStart(3, '0');
+    const [_, nanoseconds] = process.hrtime();
+    const microsecond = String(Math.floor(nanoseconds / 1000) % 1000).padStart(3, '0');
+    return `${year}-${month}-${day} ${hour}:${minute}:${second}.${millisecond}.${microsecond}`;
+}
+
 // Database path
 const DB_PATH = path.join(__dirname, '..', 'data', 'stock.db');
 
@@ -111,7 +126,7 @@ async function saveStockData(ticker, data) {
 // Fetch data from yfinance and save to SQLite
 async function fetchStockData(ticker, periodDays = 400) {
     const pythonPath = 'C:\\Program Files\\PyManager\\python.exe';
-    const scriptPath = 'E:\\workspace\\hope_stock\\hope_stock\\core\\fetcher.py';
+    const scriptPath = 'E:\\workspace\\hope_stock\\core\\fetcher.py';
     
     return new Promise((resolve, reject) => {
         const proc = spawn(pythonPath, [scriptPath, ticker, periodDays.toString()]);
@@ -146,7 +161,7 @@ async function fetchStockData(ticker, periodDays = 400) {
 // Run prediction using Python
 async function runPrediction(ticker, trainingDays = 240, threshold = 0.5) {
     const pythonPath = 'C:\\Program Files\\PyManager\\python.exe';
-    const scriptPath = 'E:\\workspace\\hope_stock\\hope_stock\\core\\predictor.py';
+    const scriptPath = 'E:\\workspace\\hope_stock\\core\\predictor.py';
     
     return new Promise((resolve, reject) => {
         const proc = spawn(pythonPath, [scriptPath, ticker, trainingDays.toString(), threshold.toString()]);
@@ -182,6 +197,8 @@ async function runPrediction(ticker, trainingDays = 240, threshold = 0.5) {
 
 // GET /api/stock/list - Get available stocks
 exports.getStockList = async (req, res) => {
+    const methodName = 'getStockList';
+    console.log(`[${getTimestamp()}] [START] ${methodName}`);
     try {
         res.json({
             success: true,
@@ -189,11 +206,15 @@ exports.getStockList = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        console.log(`[${getTimestamp()}] [END] ${methodName}`);
     }
 };
 
 // POST /api/stock/fetch - Fetch and save data (skip if exists)
 exports.fetchData = async (req, res) => {
+    const methodName = 'fetchData';
+    console.log(`[${getTimestamp()}] [START] ${methodName}`);
     try {
         const { ticker, force = false } = req.body;
         const today = new Date().toISOString().split('T')[0];
@@ -243,11 +264,15 @@ exports.fetchData = async (req, res) => {
         }
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        console.log(`[${getTimestamp()}] [END] ${methodName}`);
     }
 };
 
 // POST /api/stock/data - Get stock data from SQLite
 exports.getStockData = async (req, res) => {
+    const methodName = 'getStockData';
+    console.log(`[${getTimestamp()}] [START] ${methodName}`);
     try {
         const { ticker, days = 365 } = req.body;
         const db = await getDB();
@@ -274,11 +299,15 @@ exports.getStockData = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        console.log(`[${getTimestamp()}] [END] ${methodName}`);
     }
 };
 
 // POST /api/stock/predict - Run prediction for a stock
 exports.predict = async (req, res) => {
+    const methodName = 'predict';
+    console.log(`[${getTimestamp()}] [START] ${methodName}`);
     try {
         const { ticker, trainingDays = 240, threshold = 0.5 } = req.body;
         
@@ -304,11 +333,15 @@ exports.predict = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        console.log(`[${getTimestamp()}] [END] ${methodName}`);
     }
 };
 
 // POST /api/stock/predictAll - Predict all stocks
 exports.predictAll = async (req, res) => {
+    const methodName = 'predictAll';
+    console.log(`[${getTimestamp()}] [START] ${methodName}`);
     try {
         const { trainingDays = 240, threshold = 0.5 } = req.body;
         
@@ -338,5 +371,7 @@ exports.predictAll = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        console.log(`[${getTimestamp()}] [END] ${methodName}`);
     }
 };

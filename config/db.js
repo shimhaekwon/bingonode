@@ -8,7 +8,7 @@ const LOG = {
   info: (...args) => console.log('[db:info]', ...args)
 };
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'data.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'bingo.db');
 const db = new sqlite3.Database(DB_PATH);
 
 // Promise 래퍼들 (완전 재작성)
