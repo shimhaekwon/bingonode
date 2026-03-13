@@ -111,7 +111,7 @@ async function saveStockData(ticker, data) {
 // Fetch data from yfinance and save to SQLite
 async function fetchStockData(ticker, periodDays = 400) {
     const pythonPath = 'C:\\Program Files\\PyManager\\python.exe';
-    const scriptPath = 'E:\\workspace\\hope_stock\\hope_stock\\core\\fetcher.py';
+    const scriptPath = 'E:\\workspace\\hope_stock\\core\\fetcher.py';
     
     return new Promise((resolve, reject) => {
         const proc = spawn(pythonPath, [scriptPath, ticker, periodDays.toString()]);
@@ -146,7 +146,7 @@ async function fetchStockData(ticker, periodDays = 400) {
 // Run prediction using Python
 async function runPrediction(ticker, trainingDays = 240, threshold = 0.5) {
     const pythonPath = 'C:\\Program Files\\PyManager\\python.exe';
-    const scriptPath = 'E:\\workspace\\hope_stock\\hope_stock\\core\\predictor.py';
+    const scriptPath = 'E:\\workspace\\hope_stock\\core\\predictor.py';
     
     return new Promise((resolve, reject) => {
         const proc = spawn(pythonPath, [scriptPath, ticker, trainingDays.toString(), threshold.toString()]);
