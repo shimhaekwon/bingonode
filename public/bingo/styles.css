@@ -48,19 +48,41 @@ body {
 .data-viewer {
   background:#fff; border:1px solid var(--border);
   border-radius:8px; padding:8px 12px;
+  position: relative;
 }
 .data-viewer-header {
   display:flex; align-items:center; justify-content:space-between;
   margin-bottom:6px;
 }
 #dataViewerInner {
-  /* 헤더 + 10행만 보이도록 스크롤 컨테이너 */
+  /* 핸들 추가에 맞춰 max-height 조정 */
   max-height: calc(var(--dv-head-h) + (var(--dv-row-h) * 10));
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #fff;
   box-shadow: var(--shadow);
+}
+
+/* 리사이즈 핸들 */
+.rd-resize-handle {
+  position: absolute;
+  left: 12px; right: 12px; bottom: 8px;
+  height: 6px;
+  cursor: row-resize;
+  border-radius: 3px;
+  background: transparent;
+  z-index: 5;
+}
+.rd-resize-handle:hover { background: rgba(0,0,0,.08); }
+.rd-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px; height: 4px;
+  background: #ddd;
+  border-radius: 2px;
 }
 
 /* 표 기본 */

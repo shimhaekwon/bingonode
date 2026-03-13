@@ -7,18 +7,25 @@
     <title>Stock Prediction - Hope Stock</title>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.3/dist/full.css" rel="stylesheet" type="text/css" />
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2/dist/tailwind.min.css" rel="stylesheet" type="text/css" />
+    <!-- TradingView Lightweight Charts v3 -->
+    <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         .loading { opacity: 0.5; pointer-events: none; }
         .up { color: #ef4444; }
         .down { color: #3b82f6; }
         .flat { color: #6b7280; }
+        #chart-container {
+            height: 350px;
+            width: 100%;
+        }
     </style>
 </head>
 <body class="bg-base-200 min-h-screen">
     <div class="navbar bg-base-100 shadow-lg">
         <div class="flex-1">
             <a href="/" class="btn btn-ghost normal-case text-xl">Bingo</a>
-            <a href="/stock/index.html" class="btn btn-ghost normal-case text-xl text-primary">Stock Prediction</a>
+            <a href="/stock/index.html" class="btn btn-ghost normal-case text-xl text-primary">Stock (Python)</a>
+            <a href="/stock/node-index.html" class="btn btn-ghost normal-case text-xl">Stock [Node.js]</a>
         </div>
     </div>
 
@@ -73,15 +80,29 @@
 
         <!-- Detail Modal -->
         <dialog id="detailModal" class="modal">
-            <div class="modal-box max-w-2xl">
-                <h3 class="font-bold text-lg" id="modalTitle">Stock Details</h3>
-                <div class="py-4" id="modalContent">
+            <div class="modal-box max-w-4xl w-11/12 max-w-5xl">
+                <h3 class="font-bold text-lg mb-4" id="modalTitle">Stock Details</h3>
+                
+                <!-- Chart Container -->
+                <div id="chart-container" class="mb-4"></div>
+                
+                <!-- Timeframe Buttons -->
+                <div class="flex gap-2 mb-4">
+                    <button class="btn btn-xs btn-outline" onclick="changeTimeframe('D')">일</button>
+                    <button class="btn btn-xs btn-outline" onclick="changeTimeframe('W')">주</button>
+                    <button class="btn btn-xs btn-outline" onclick="changeTimeframe('M')">월</button>
+                </div>
+                
+                <div id="modalContent">
                     <!-- Details will be loaded here -->
                 </div>
                 <div class="modal-action">
-                    <button class="btn" onclick="document.getElementById('detailModal').close()">Close</button>
+                    <button class="btn" onclick="closeDetailModal()">Close</button>
                 </div>
             </div>
+            <form method="dialog" class="modal-backdrop">
+                <button>close</button>
+            </form>
         </dialog>
 
         <!-- Loading -->
@@ -93,204 +114,48 @@
         </div>
     </div>
 
+    <!-- Common Libraries -->
     <script>
-        const stockList = [
-            { ticker: "005930.KS", name: "Samsung Electronics" },
-            { ticker: "000660.KS", name: "SK Hynix" },
-            { ticker: "035420.KS", name: "NAVER" },
-            { ticker: "051910.KS", name: "LG Energy Solution" },
-            { ticker: "006400.KS", name: "Samsung SDI" },
-            { ticker: "005490.KS", name: "POSCO Holdings" },
-            { ticker: "035720.KS", name: "Kakao" },
-            { ticker: "012330.KS", name: "Hyundai Mobis" },
-            { ticker: "000270.KS", name: "Kia" },
-            { ticker: "068270.KS", name: "Celltrion" },
-        ];
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            renderStockButtons();
-        });
-
-        function renderStockButtons() {
-            const container = document.getElementById('stockList');
-            container.innerHTML = stockList.map(stock => `
-                <button class="btn btn-sm" onclick="predictStock('${stock.ticker}')">
-                    ${stock.name}
-                </button>
-            `).join('');
-        }
-
-        function showLoading() {
-            document.getElementById('loading').classList.remove('hidden');
-        }
-
-        function hideLoading() {
-            document.getElementById('loading').classList.add('hidden');
-        }
-
-        function formatPercent(value, prefix = '') {
-            if (value === null || value === undefined) return '-';
-            const sign = value >= 0 ? '+' : '';
-            return `${sign}${value.toFixed(2)}%`;
-        }
-
-        function getDirectionClass(value) {
-            if (value > 0) return 'up';
-            if (value < 0) return 'down';
-            return 'flat';
-        }
-
-        function getDirectionText(value) {
-            if (value > 0) return 'UP';
-            if (value < 0) return 'DOWN';
-            return 'FLAT';
-        }
-
-        async function fetchAPI(url, data) {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            return response.json();
-        }
+        // Set API Base before loading common.js
+        window.API_BASE = '/api/stock';
+    </script>
+    <script src="js/stock-common.js"></script>
+    <script src="js/stock-chart.js"></script>
+    
+    <!-- Page Specific Script -->
+    <script>
+        // API overrides for Python version
+        const API_BASE = '/api/stock';
 
         async function refreshData() {
-            showLoading();
+            window.StockCommon.showLoading();
             try {
-                for (const stock of stockList) {
-                    await fetchAPI('/api/stock/fetch', { ticker: stock.ticker, force: false });
+                for (const stock of window.StockCommon.stockList) {
+                    await window.StockCommon.fetchAPI('/api/stock/fetch', { ticker: stock.ticker, force: false });
                 }
                 alert('Data refresh completed!');
             } catch (error) {
                 alert('Error: ' + error.message);
             }
-            hideLoading();
+            window.StockCommon.hideLoading();
         }
 
-        async function predictStock(ticker) {
-            showLoading();
-            try {
-                const result = await fetchAPI('/api/stock/predict', { ticker });
-                if (result.success) {
-                    renderResult(result);
-                } else {
-                    alert('Error: ' + result.error);
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-            hideLoading();
+        function changeTimeframe(tf) {
+            console.log('Timeframe change to:', tf);
         }
 
-        async function predictAll() {
-            showLoading();
-            try {
-                const result = await fetchAPI('/api/stock/predictAll', { trainingDays: 240, threshold: 0.3 });
-                if (result.success) {
-                    renderResults(result.results);
-                } else {
-                    alert('Error: ' + result.error);
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-            hideLoading();
+        // Chart initialization for this page (Lightweight Charts)
+        function initChart() {
+            console.log('🟢 [initChart] Initializing Lightweight Charts');
+            const chart = createChart('chart-container', 'lightweight', { height: 350 });
+            chart.init();
+            return chart;
         }
 
-        function renderResult(result) {
-            const tbody = document.getElementById('resultsBody');
-            const stock = stockList.find(s => s.ticker === result.ticker);
-            
-            tbody.innerHTML = `
-                <tr class="hover">
-                    <td>${result.ticker}</td>
-                    <td>${stock?.name || result.ticker}</td>
-                    <td>${result.last_date}</td>
-                    <td class="${getDirectionClass(result.actual_change)}">${formatPercent(result.actual_change)}</td>
-                    <td>${result.best_technique || '-'}</td>
-                    <td>${result.best_similarity ? (result.best_similarity * 100).toFixed(1) + '%' : '-'}</td>
-                    <td class="${getDirectionClass(result.next_day_prediction)}">${formatPercent(result.next_day_prediction)}</td>
-                    <td class="${getDirectionClass(result.next_day_prediction)}">${getDirectionText(result.next_day_prediction)}</td>
-                </tr>
-            `;
-        }
-
-        function renderResults(results) {
-            const tbody = document.getElementById('resultsBody');
-            
-            if (!results || results.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center">No results</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = results.map(result => {
-                if (result.error) {
-                    return `
-                        <tr class="hover">
-                            <td>${result.ticker}</td>
-                            <td>${result.name || result.ticker}</td>
-                            <td colspan="6" class="text-error">Error: ${result.error}</td>
-                        </tr>
-                    `;
-                }
-
-                return `
-                    <tr class="hover cursor-pointer" onclick="showDetail('${result.ticker}')">
-                        <td>${result.ticker}</td>
-                        <td>${result.name || result.ticker}</td>
-                        <td>${result.last_date}</td>
-                        <td class="${getDirectionClass(result.actual_change)}">${formatPercent(result.actual_change)}</td>
-                        <td>${result.best_technique || '-'}</td>
-                        <td>${result.best_similarity ? (result.best_similarity * 100).toFixed(1) + '%' : '-'}</td>
-                        <td class="${getDirectionClass(result.next_day_prediction)}">${formatPercent(result.next_day_prediction)}</td>
-                        <td class="${getDirectionClass(result.next_day_prediction)}">${getDirectionText(result.next_day_prediction)}</td>
-                    </tr>
-                `;
-            }).join('');
-        }
-
-        async function showDetail(ticker) {
-            const result = await fetchAPI('/api/stock/predict', { ticker });
-            if (!result.success) return;
-
-            const stock = stockList.find(s => s.ticker === ticker);
-            document.getElementById('modalTitle').textContent = stock?.name || ticker;
-            
-            const techniques = Object.entries(result.all_similarities || {})
-                .sort((a, b) => b[1] - a[1])
-                .map(([name, sim]) => `<tr><td>${name}</td><td>${(sim * 100).toFixed(1)}%</td></tr>`)
-                .join('');
-
-            document.getElementById('modalContent').innerHTML = `
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <h4 class="font-bold">Info</h4>
-                        <p>Ticker: ${result.ticker}</p>
-                        <p>Last Date: ${result.last_date}</p>
-                        <p>Last Close: ${result.last_close?.toLocaleString()}</p>
-                        <p>Actual Change: ${formatPercent(result.actual_change)}</p>
-                    </div>
-                    <div>
-                        <h4 class="font-bold">Prediction</h4>
-                        <p>Next Day: ${formatPercent(result.next_day_prediction)}</p>
-                        <p>Direction: <span class="${getDirectionClass(result.next_day_prediction)}">${getDirectionText(result.next_day_prediction)}</span></p>
-                        <p>Best Technique: ${result.best_technique}</p>
-                        <p>Best Similarity: ${(result.best_similarity * 100).toFixed(1)}%</p>
-                    </div>
-                </div>
-                <div class="mt-4">
-                    <h4 class="font-bold">All Techniques</h4>
-                    <table class="table table-sm">
-                        <thead><tr><th>Technique</th><th>Similarity</th></tr></thead>
-                        <tbody>${techniques}</tbody>
-                    </table>
-                </div>
-            `;
-
-            document.getElementById('detailModal').showModal();
-        }
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            window.StockCommon.renderStockButtons();
+        });
     </script>
 </body>
 </html>

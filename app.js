@@ -10,6 +10,7 @@ var indexRouter = require('@routes/index');
 var calRouter  = require('@routes/calRouter');
 var bingoRouter = require('@routes/bingoRouter');
 var stockRouter = require('@routes/stockRouter');
+var stockRouter2 = require('@routes/stockRouter2');
 
 var app = express();
 
@@ -48,6 +49,7 @@ app.use('/', indexRouter);
 app.use('/api/calc/', calRouter);
 app.use('/api/bingo/', bingoRouter);
 app.use('/api/stock/', stockRouter);
+app.use('/api/stock2/', stockRouter2);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

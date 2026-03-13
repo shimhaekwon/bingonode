@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Prediction - Hope Stock [Node.js]</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.3/dist/full.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2/dist/tailwind.min.css" rel="stylesheet" type="text/css" />
+    <!-- Chart.js instead of Lightweight Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .loading { opacity: 0.5; pointer-events: none; }
+        .up { color: #ef4444; }
+        .down { color: #3b82f6; }
+        .flat { color: #6b7280; }
+        #chart-container {
+            height: 350px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-base-200 min-h-screen">
+    <div class="navbar bg-base-100 shadow-lg">
+        <div class="flex-1">
+            <a href="/" class="btn btn-ghost normal-case text-xl">Bingo</a>
+            <a href="/stock/index.html" class="btn btn-ghost normal-case text-xl">Stock (Python)</a>
+            <a href="/stock/node-index.html" class="btn btn-ghost normal-case text-xl text-primary">Stock [Node.js]</a>
+        </div>
+    </div>
+
+    <div class="container mx-auto p-4">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold">Stock Prediction [Node.js]</h1>
+            <p class="text-base-content/70 mt-2">AI-powered technical analysis (Pure Node.js)</p>
+        </div>
+
+        <!-- Stock Selection -->
+        <div class="card bg-base-100 shadow-xl mb-6">
+            <div class="card-body">
+                <h2 class="card-title">Select Stock</h2>
+                <div class="flex flex-wrap gap-2 mb-4" id="stockList">
+                    <!-- Stock buttons will be loaded here -->
+                </div>
+                <div class="flex gap-2">
+                    <button class="btn btn-primary" onclick="predictAll()">Predict All</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">Prediction Results</h2>
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Name</th>
+                                <th>Last Date</th>
+                                <th>Actual %</th>
+                                <th>Best Technique</th>
+                                <th>Similarity</th>
+                                <th>Next Day %</th>
+                                <th>Direction</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                            <tr>
+                                <td colspan="8" class="text-center">Select a stock or click "Predict All"</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detail Modal -->
+        <dialog id="detailModal" class="modal">
+            <div class="modal-box max-w-4xl w-11/12 max-w-5xl">
+                <h3 class="font-bold text-lg mb-4" id="modalTitle">Stock Details</h3>
+                
+                <!-- Chart Container -->
+                <div id="chart-container" class="mb-4"></div>
+                
+                <!-- Timeframe Buttons -->
+                <div class="flex gap-2 mb-4">
+                    <button class="btn btn-xs btn-outline" onclick="changeTimeframe('D')">일</button>
+                    <button class="btn btn-xs btn-outline" onclick="changeTimeframe('W')">주</button>
+                    <button class="btn btn-xs btn-outline" onclick="changeTimeframe('M')">월</button>
+                </div>
+                
+                <div id="modalContent">
+                    <!-- Details will be loaded here -->
+                </div>
+                <div class="modal-action">
+                    <button class="btn" onclick="closeDetailModal()">Close</button>
+                </div>
+            </div>
+            <form method="dialog" class="modal-backdrop">
+                <button>close</button>
+            </form>
+        </dialog>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden fixed inset-0 bg-base-300/50 flex items-center justify-center z-50">
+            <div class="text-center">
+                <span class="loading loading-spinner loading-lg"></span>
+                <p class="mt-2">Processing...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Common Libraries -->
+    <script>
+        // Set API Base before loading common.js
+        window.API_BASE = '/api/stock2';
+    </script>
+    <script src="js/stock-common.js"></script>
+    <script src="js/stock-chart.js"></script>
+    
+    <!-- Page Specific Script -->
+    <script>
+        // Chart initialization for this page (Chart.js)
+        function initChart() {
+            console.log('🟢 [initChart] Initializing Chart.js');
+            const chart = createChart('chart-container', 'chartjs', { height: 350 });
+            chart.init();
+            return chart;
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            window.StockCommon.renderStockButtons();
+        });
+    </script>
+</body>
+</html>
