@@ -2,10 +2,11 @@
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 require('dotenv').config();
+const logger = require('../utils/logger.js');
 
 const LOG = {
-  err: (...args) => console.error('[db:err]', ...args),
-  info: (...args) => console.log('[db:info]', ...args)
+  err: (...args) => logger.error('[db:err]', ...args),
+  info: (...args) => logger.info('[db:info]', ...args)
 };
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'bingo.db');
@@ -20,7 +21,7 @@ function execAll(sql, params = []) {
         LOG.err('execAll error:', err.message);
         return reject(err);
       }else {        
-        console.log('execGet SQL:', sql);
+        LOG.info('execAll SQL:', sql);
       }
       resolve(rows || []);
     });
@@ -35,7 +36,7 @@ function execGet(sql, params = []) {
         LOG.err('execGet error:', err.message);
         return reject(err);
       }else {        
-        console.log('execGet SQL:', sql);
+        LOG.info('execGet SQL:', sql);
       }
       resolve(row || null);
     });
@@ -46,11 +47,11 @@ function execRun(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function(err) {  // ← function 사용 (this 사용)
       if (err) {
-        LOG.err('execGet SQL:', sql);
+        LOG.err('execRun SQL:', sql);
         LOG.err('execRun error:', err.message);
         return reject(err);
       }else {        
-        console.log('execGet SQL:', sql);
+        LOG.info('execRun SQL:', sql);
       }
       resolve({ changes: this.changes, lastID: this.lastID });
     });

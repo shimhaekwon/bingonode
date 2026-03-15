@@ -1,6 +1,12 @@
 // @models/bingoModel.js
 const { execAll, execGet, execRun } = require('@config/db.js');
 const { BingoQueries } = require('@queries/bingoQueries.js');
+const logger = require('../utils/logger.js');
+
+const LOG = {
+  err: (...args) => logger.error('[model:err]', ...args),
+  info: (...args) => logger.info('[model:info]', ...args)
+};
 
 async function getList(limit = 99999, offset = 0) {
   try {
@@ -52,11 +58,6 @@ async function getMaxSeq() {
     LOG.err('getOne error:', error);
     throw error;
   }
-}
-
-const LOG = {
-  err: (...args) => console.error('[model:err]', ...args),
-  info: (...args) => console.log('[model:info]', ...args)
 };
 
 async function setUpsert(seq, row) {

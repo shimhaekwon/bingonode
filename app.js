@@ -3,8 +3,9 @@ var express = require('express');
 var path = require('path');
 const fs = require('fs');
 var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+var morgan = require('morgan');
 const nunjucks = require('nunjucks');
+const logger = require('./utils/logger.js');
 
 var indexRouter = require('@routes/index');
 var calRouter  = require('@routes/calRouter');
@@ -22,7 +23,7 @@ nunjucks.configure('views', {
   watch: true,
 });
 
-app.use(logger('dev'));
+app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
@@ -32,14 +33,13 @@ function loggingMiddleware(req, res, next) {
   const reqQuery = JSON.stringify(req.query);
   const reqBody = JSON.stringify(req.body);
 
-  console.log(`[${new Date().toISOString()}]`);
-  console.log(`req.method:[${req.method}]`);
-  console.log(`req.url:[${req.url}]`);
-  console.log(`req.headers.host:[${req.headers.host}]`);
-  console.log(`req.originalUrl:[${req.originalUrl}]`);
-  console.log(`from ip:[${req.ip}]`);
-  console.log(`req.query:[${reqQuery}]`);
-  console.log(`req.body:[${reqBody}]`);
+  logger.info(`req.method:[${req.method}]`);
+  logger.info(`req.url:[${req.url}]`);
+  logger.info(`req.headers.host:[${req.headers.host}]`);
+  logger.info(`req.originalUrl:[${req.originalUrl}]`);
+  logger.info(`from ip:[${req.ip}]`);
+  logger.info(`req.query:[${reqQuery}]`);
+  logger.info(`req.body:[${reqBody}]`);
 
   next(); // 다음 미들웨어 또는 라우터로 넘어간다
 }
@@ -60,8 +60,8 @@ require('dotenv').config();
 
 //const isDev = req.app.get('env') === 'development';
 const isDev = process.env.NODE_ENV === 'development';
-console.log('Current Environment:',process.env.NODE_ENV);
-console.log('Current Environment:',process.env.port);
+logger.info('Current Environment:', process.env.NODE_ENV);
+logger.info('Current PORT:', process.env.PORT);
 
 // error handler
 app.use(function(err, req, res, next) {
@@ -75,15 +75,10 @@ app.use(function(err, req, res, next) {
   //res.render('error'); >> 아래로 대체
   res.render('error', {
     message: err.message,
-    status : err.status || 500,
+    status: err.status || 500,
     url: req.originalUrl,   // 요청된 경로 전달
     stack: isDev ? err.stack : null   // 개발환경에서만 statck 전달
   });
-
-
-/////// api 자동 loader
-
-
 });
 
 module.exports = app;

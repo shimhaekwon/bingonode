@@ -3,6 +3,7 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { spawn } = require('child_process');
+const logger = require('../utils/logger.js');
 
 // Helper function to get timestamp with microseconds
 function getTimestamp() {
@@ -21,6 +22,10 @@ function getTimestamp() {
 
 // Database path
 const DB_PATH = path.join(__dirname, '..', 'data', 'stock.db');
+
+// Python paths from environment
+const PYTHON_PATH = process.env.PYTHON_PATH || 'python';
+const SCRIPT_PATH = process.env.SCRIPT_PATH || path.join(__dirname, '..', 'scripts');
 
 // Initialize database
 function initDB() {
@@ -125,11 +130,10 @@ async function saveStockData(ticker, data) {
 
 // Fetch data from yfinance and save to SQLite
 async function fetchStockData(ticker, periodDays = 400) {
-    const pythonPath = 'C:\\Program Files\\PyManager\\python.exe';
-    const scriptPath = 'E:\\workspace\\hope_stock\\core\\fetcher.py';
+    const scriptPath = path.join(SCRIPT_PATH, 'fetcher.py');
     
     return new Promise((resolve, reject) => {
-        const proc = spawn(pythonPath, [scriptPath, ticker, periodDays.toString()]);
+        const proc = spawn(PYTHON_PATH, [scriptPath, ticker, periodDays.toString()]);
         
         let data = '';
         let error = '';
@@ -160,11 +164,10 @@ async function fetchStockData(ticker, periodDays = 400) {
 
 // Run prediction using Python
 async function runPrediction(ticker, trainingDays = 240, threshold = 0.5) {
-    const pythonPath = 'C:\\Program Files\\PyManager\\python.exe';
-    const scriptPath = 'E:\\workspace\\hope_stock\\core\\predictor.py';
+    const scriptPath = path.join(SCRIPT_PATH, 'predictor.py');
     
     return new Promise((resolve, reject) => {
-        const proc = spawn(pythonPath, [scriptPath, ticker, trainingDays.toString(), threshold.toString()]);
+        const proc = spawn(PYTHON_PATH, [scriptPath, ticker, trainingDays.toString(), threshold.toString()]);
         
         let data = '';
         let error = '';

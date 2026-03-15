@@ -1,9 +1,11 @@
 // ./utils/util.js
+const logger = require('./logger.js');
+
 const LOG = {
-  dbg: (...args) => console.log(...args),
-  info: (...args) => console.info(...args),
-  warn: (...args) => console.warn(...args),
-  err: (...args) => console.error(...args)
+  dbg: (...args) => logger.debug(...args),
+  info: (...args) => logger.info(...args),
+  warn: (...args) => logger.warn(...args),
+  err: (...args) => logger.error(...args)
 };
 
 const util = {
@@ -29,7 +31,7 @@ const util = {
 
       // req가 없으면 안전하게 종료
       if (!req) {
-        console.error('REQ BODY: unknown (req is undefined)');
+        LOG.err('REQ BODY: unknown (req is undefined)');
         return;
       }
 
@@ -53,7 +55,7 @@ const util = {
       }
     } catch (err) {
       // 로깅 중 오류가 서비스 흐름을 막지 않도록
-      console.warn('[methodLog] logging error:', err?.message);
+      LOG.warn('[methodLog] logging error:', err?.message);
     }
   },
 };

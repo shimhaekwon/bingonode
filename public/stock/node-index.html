@@ -133,7 +133,9 @@
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', () => {
-            window.StockCommon.renderStockButtons();
+            if (window.StockCommon) {
+                window.StockCommon.renderStockButtons();
+            }
         });
     </script>
 </body>
