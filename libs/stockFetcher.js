@@ -24,7 +24,8 @@ const KOREAN_STOCKS = [
 class StockFetcher {
     constructor() {
         this.cache = {};
-        this.yf = new YahooFinance();
+        // Suppress the deprecation notice for historical()
+        this.yf = new YahooFinance({ suppressNotices: ['ripHistorical'] });
     }
 
     /**
@@ -47,25 +48,30 @@ class StockFetcher {
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - periodDays);
 
-            const result = await this.yf.historical(ticker, {
+            // Use chart() instead of deprecated historical()
+            const result = await this.yf.chart(ticker, {
                 period1: startDate.toISOString().split('T')[0],
-                period2: endDate.toISOString().split('T')[0]
+                period2: endDate.toISOString().split('T')[0],
+                interval: '1d'
             });
 
-            if (!result || result.length === 0) {
+            if (!result || !result.quotes || result.quotes.length === 0) {
                 console.warn(`[WARN] No data for ${ticker}`);
                 return null;
             }
 
             // Transform to match expected format (data comes oldest-first from Yahoo)
-            const data = result.map(row => ({
-                date: row.date.toISOString().split('T')[0],
-                open: row.open,
-                high: row.high,
-                low: row.low,
-                close: row.close,
-                volume: row.volume
-            }));
+            // Filter out rows with null close values (usually current day before market closes)
+            const data = result.quotes
+                .filter(row => row.close !== null)
+                .map(row => ({
+                    date: row.date.toISOString().split('T')[0],
+                    open: row.open,
+                    high: row.high,
+                    low: row.low,
+                    close: row.close,
+                    volume: row.volume
+                }));
 
             return data;
         } catch (error) {

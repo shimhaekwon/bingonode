@@ -124,8 +124,8 @@
     
     <!-- Page Specific Script -->
     <script>
-        // API overrides for Python version
-        const API_BASE = '/api/stock';
+        // API Base is already set in stock-common.js, just reference it
+        // Remove duplicate const declaration - use window.StockCommon instead
 
         async function refreshData() {
             window.StockCommon.showLoading();
@@ -152,12 +152,32 @@
             return chart;
         }
 
-        // Initialize page
-        document.addEventListener('DOMContentLoaded', () => {
-            if (window.StockCommon) {
-                window.StockCommon.renderStockButtons();
+        // Use stockList from stock-common.js via window.StockCommon
+        // Render stock buttons
+        function renderStockButtons() {
+            const container = document.getElementById('stockList');
+            if (!container) {
+                console.error('stockList container not found');
+                return;
             }
-        });
+            const stockList = window.StockCommon.stockList;
+            container.innerHTML = stockList.map(stock => 
+                '<button class="btn btn-sm" onclick="predictStock(\'' + stock.ticker + '\')">' + stock.name + '</button>'
+            ).join('');
+            console.log('Stock buttons rendered:', stockList.length);
+        }
+
+        // Initialize page
+        renderStockButtons();
+
+        // Prediction functions - wrapper for StockCommon
+        async function predictStock(ticker) {
+            await window.StockCommon.predictStock(ticker);
+        }
+
+        async function predictAll() {
+            await window.StockCommon.predictAll();
+        }
     </script>
 </body>
 </html>
