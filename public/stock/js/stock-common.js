@@ -19,6 +19,11 @@ const stockList = [
 // API Base URL (default to Node.js version, can be overridden by page)
 const API_BASE = window.API_BASE || '/api/stock2';
 
+// Cache for last prediction results { ticker: result }
+const lastPredictResults = {};
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 // Formatter
 function formatPercent(value) {
     if (value === null || value === undefined) return '-';
@@ -125,13 +130,14 @@ function hideLoading() {
 }
 
 // Data Fetching
-const stockDataCache = {};
+const stockDataCache = {}; // { ticker: { data, expireAt } }
 async function fetchStockData(ticker, days = 365) {
-    if (stockDataCache[ticker]) return stockDataCache[ticker];
+    const cached = stockDataCache[ticker];
+    if (cached && cached.expireAt > Date.now()) return cached.data;
     try {
         const result = await fetchAPI(`${API_BASE}/data`, { ticker, days });
         if (result.success && result.data) {
-            stockDataCache[ticker] = result.data;
+            stockDataCache[ticker] = { data: result.data, expireAt: Date.now() + CACHE_TTL_MS };
             return result.data;
         }
         return [];
@@ -147,6 +153,7 @@ async function predictStock(ticker) {
     try {
         const result = await fetchAPI(`${API_BASE}/predict`, { ticker });
         if (result.success) {
+            lastPredictResults[ticker] = result;
             renderResult(result);
         } else {
             alert('Error: ' + result.error);
@@ -162,6 +169,7 @@ async function predictAll() {
     try {
         const result = await fetchAPI(`${API_BASE}/predictAll`, { trainingDays: 240, threshold: 0.5 });
         if (result.success) {
+            result.results.forEach(r => { if (r.success !== false) lastPredictResults[r.ticker] = r; });
             renderResults(result.results);
         } else {
             alert('Error: ' + result.error);
@@ -181,15 +189,22 @@ async function showDetail(ticker) {
 
     showLoading();
     try {
-        const result = await fetchAPI(`${API_BASE}/predict`, { ticker });
-        if (!result.success) {
-            alert('Error: ' + result.error);
-            return;
+        // Reuse cached result if available, otherwise fetch
+        let result = lastPredictResults[ticker];
+        if (!result) {
+            result = await fetchAPI(`${API_BASE}/predict`, { ticker });
+            if (!result.success) {
+                alert('Error: ' + result.error);
+                return;
+            }
+            lastPredictResults[ticker] = result;
         }
 
         const stockData = await fetchStockData(ticker, 365);
         const stock = stockList.find(s => s.ticker === ticker);
-        document.getElementById('modalTitle').textContent = stock?.name || ticker;
+        const modalTitle = document.getElementById('modalTitle');
+        modalTitle.textContent = stock?.name || ticker;
+        modalTitle.dataset.ticker = ticker;
 
         const techniques = Object.entries(result.all_similarities || {})
             .sort((a, b) => b[1] - a[1])
@@ -237,14 +252,40 @@ async function showDetail(ticker) {
                 }
                 
                 if (chartInstance) {
-                    const chronologicalData = [...stockData].reverse();
-                    chartInstance.update(chronologicalData);
+                    chartInstance.update(stockData);
                 }
             }
         }, 200);
 
     } catch (error) {
         alert('Error: ' + error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// Timeframe: D = daily 365 days, W = weekly 2 years, M = monthly 5 years
+async function changeTimeframe(period) {
+    if (!chartInstance) return;
+    const modal = document.getElementById('detailModal');
+    if (!modal || !modal.open) return;
+
+    const title = document.getElementById('modalTitle');
+    const ticker = title ? title.dataset.ticker : null;
+    if (!ticker) return;
+
+    const daysMap = { D: 365, W: 730, M: 1825 };
+    const days = daysMap[period] || 365;
+
+    // Invalidate cache for this ticker to force fresh fetch
+    delete stockDataCache[ticker];
+
+    showLoading();
+    try {
+        const stockData = await fetchStockData(ticker, days);
+        if (stockData.length > 0 && chartInstance) {
+            chartInstance.update(stockData);
+        }
     } finally {
         hideLoading();
     }
@@ -275,6 +316,10 @@ window.StockCommon = {
     predictAll,
     showDetail,
     closeDetailModal,
+    changeTimeframe,
     fetchStockData
 };
+
+// Make changeTimeframe globally accessible (called from HTML onclick)
+window.changeTimeframe = changeTimeframe;
 

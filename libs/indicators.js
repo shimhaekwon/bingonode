@@ -1,12 +1,12 @@
 // libs/indicators.js
 /**
  * Technical Analysis Indicators Module
- * - Implements 9 technical indicators using trading-signals library
+ * - Implements 8 technical indicators (SMA×3, EMA, RSI, MACD, Bollinger: trading-signals / Momentum, Volume: custom)
  * - Each indicator calculates predicted rise/fall % separately
  */
 
 const {
-    SMA, EMA, RSI, MACD, BollingerBands, ATR
+    SMA, EMA, RSI, MACD, BollingerBands, StochasticOscillator
 } = require('trading-signals');
 const ChartPatternEngine = require('./chartPatterns');
 
@@ -127,22 +127,28 @@ class IndicatorEngine {
     }
 
     /**
-     * Calculate ATR (Average True Range)
+     * Calculate Stochastic Oscillator (%K, %D)
      * @param {Object[]} data - Array of {high, low, close}
-     * @param {number} period - Period for ATR (default 14)
-     * @returns {number[]} ATR values
+     * @param {number} period - Lookback period (default 14)
+     * @param {number} signalPeriod - Signal smoothing (default 3)
+     * @returns {Array} Array of {stochK, stochD} or null
      */
-    calculateATR(data, period = 14) {
-        const atr = new ATR(period);
+    calculateStochastic(data, period = 14, signalPeriod = 3) {
+        const stoch = new StochasticOscillator(period, signalPeriod, signalPeriod);
         const results = [];
-        
         for (const candle of data) {
-            // ATR requires {high, low, close}
-            const result = atr.add({ high: candle.high, low: candle.low, close: candle.close });
-            results.push(result);
+            const result = stoch.add({ high: candle.high, low: candle.low, close: candle.close });
+            results.push(result || null);
         }
-        
         return results;
+    }
+
+    /**
+     * Clamp prediction value to [-5, 5] range for fair cross-indicator comparison
+     * Prevents high-scale indicators (SMA deviation, MACD histogram) from dominating similarity
+     */
+    clamp(value, min = -5, max = 5) {
+        return Math.max(min, Math.min(max, value));
     }
 
     /**
@@ -158,45 +164,46 @@ class IndicatorEngine {
             // SMA 5/20
             const sma5 = this.calculateSMA(prices, 5);
             const sma20 = this.calculateSMA(prices, 20);
-            predictions.sma_5_20 = this.predictSMA(prices, sma5, sma20);
+            predictions.sma_5_20 = this.clamp(this.predictSMA(prices, sma5, sma20));
 
             // SMA 5/50
             const sma50 = this.calculateSMA(prices, 50);
-            predictions.sma_5_50 = this.predictSMA(prices, sma5, sma50);
+            predictions.sma_5_50 = this.clamp(this.predictSMA(prices, sma5, sma50));
 
             // SMA 20/50
-            predictions.sma_20_50 = this.predictSMA(prices, sma20, sma50);
+            predictions.sma_20_50 = this.clamp(this.predictSMA(prices, sma20, sma50));
 
             // EMA 12/26
             const ema12 = this.calculateEMA(prices, 12);
             const ema26 = this.calculateEMA(prices, 26);
-            predictions.ema_12_26 = this.predictEMA(prices, ema12, ema26);
+            predictions.ema_12_26 = this.clamp(this.predictEMA(prices, ema12, ema26));
 
             // RSI
             const rsi = this.calculateRSI(prices, 14);
-            predictions.rsi_14 = this.predictRSI(rsi);
+            predictions.rsi_14 = this.clamp(this.predictRSI(rsi));
 
             // MACD
             const macd = this.calculateMACD(prices);
-            predictions.macd = this.predictMACD(macd);
+            predictions.macd = this.clamp(this.predictMACD(macd));
 
             // Bollinger Bands
             const bb = this.calculateBollingerBands(prices, 20, 2);
-            predictions.bollinger = this.predictBollinger(prices, bb);
-
-            // ATR (volatility only, no direction prediction)
-            predictions.atr = 0;
+            predictions.bollinger = this.clamp(this.predictBollinger(prices, bb));
 
             // Momentum
-            predictions.momentum = this.predictMomentum(prices);
+            predictions.momentum = this.clamp(this.predictMomentum(prices));
 
             // Volume (simplified)
-            predictions.volume = this.predictVolume(data);
+            predictions.volume = this.clamp(this.predictVolume(data));
 
-            // Chart Patterns (Candlestick patterns)
+            // Stochastic Oscillator (%K/%D)
+            const stoch = this.calculateStochastic(data, 14, 3);
+            predictions.stochastic = this.clamp(this.predictStochastic(stoch));
+
+            // Chart Patterns (Candlestick patterns - strength already bounded by patternStrength config)
             const { predictions: chartPredictions } = await this.chartPatternEngine.runAnalysis(data);
             for (const [pattern, strength] of Object.entries(chartPredictions)) {
-                predictions[`pattern_${pattern}`] = strength;
+                predictions[`pattern_${pattern}`] = this.clamp(strength);
             }
 
         } catch (error) {
@@ -370,6 +377,32 @@ class IndicatorEngine {
         }
 
         return 0;
+    }
+
+    predictStochastic(stochValues) {
+        const last = stochValues[stochValues.length - 1];
+        const prev = stochValues[stochValues.length - 2];
+
+        if (!last || last.stochK === undefined) return 0;
+
+        const k = last.stochK;
+        const d = last.stochD;
+        const prevK = prev ? prev.stochK : k;
+        const prevD = prev ? prev.stochD : d;
+
+        // Bullish crossover: %K crosses above %D in oversold zone (<30)
+        if (prevK <= prevD && k > d && k < 30) {
+            return (30 - k) * 0.15;
+        }
+        // Bearish crossover: %K crosses below %D in overbought zone (>70)
+        if (prevK >= prevD && k < d && k > 70) {
+            return -(k - 70) * 0.15;
+        }
+        // General oversold/overbought signal
+        if (k < 20) return (20 - k) * 0.1;
+        if (k > 80) return -(k - 80) * 0.1;
+
+        return (50 - k) * 0.02;
     }
 }
 
