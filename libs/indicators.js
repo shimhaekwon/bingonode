@@ -200,6 +200,23 @@ class IndicatorEngine {
             const stoch = this.calculateStochastic(data, 14, 3);
             predictions.stochastic = this.clamp(this.predictStochastic(stoch));
 
+            // Lagged features (t-1): capture trend continuation/reversal signals
+            // Ref: "Feature Engineering - lagged RSI_t-1, MACD_t-1" (stock-prediction-composite-strategies.md)
+            if (data.length > 2) {
+                const lagData = data.slice(0, -1);
+                const lagPrices = lagData.map(d => d.close);
+
+                const lagRsi = this.calculateRSI(lagPrices, 14);
+                predictions.rsi_lag1 = this.clamp(this.predictRSI(lagRsi));
+
+                const lagMacd = this.calculateMACD(lagPrices);
+                predictions.macd_lag1 = this.clamp(this.predictMACD(lagMacd));
+
+                const lagEma12 = this.calculateEMA(lagPrices, 12);
+                const lagEma26 = this.calculateEMA(lagPrices, 26);
+                predictions.ema_lag1 = this.clamp(this.predictEMA(lagPrices, lagEma12, lagEma26));
+            }
+
             // Chart Patterns (Candlestick patterns - strength already bounded by patternStrength config)
             const { predictions: chartPredictions } = await this.chartPatternEngine.runAnalysis(data);
             for (const [pattern, strength] of Object.entries(chartPredictions)) {
