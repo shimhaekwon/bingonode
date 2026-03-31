@@ -15,6 +15,7 @@
   // ===== 상수 =====
   const FIXED_SET_COUNT = 5;
   const FIXED_SET_SIZE  = 6;
+  const LOTTO_MAX       = 45; // 로또 번호 최대값
   const EVT_READY       = 'numChosen:ready';
   const EVT_ERROR       = 'numChosen:error';
 
@@ -101,7 +102,7 @@
     if (n >= 11 && n <= 20) { return clsBase + 'blue'; }
     if (n >= 21 && n <= 30) { return clsBase + 'red'; }
     if (n >= 31 && n <= 40) { return clsBase + 'gray'; }
-    if (n >= 41 && n <= 45) { return clsBase + 'green'; }
+    if (n >= 41 && n <= LOTTO_MAX) { return clsBase + 'green'; }
     return ''; // 0, null 등
   }
 
@@ -140,6 +141,11 @@
         }
 
         for (const r of rows) {
+          const nums = [r.no1, r.no2, r.no3, r.no4, r.no5, r.no6];
+          if (!Number.isInteger(r.seq) || nums.some(n => !Number.isInteger(n) || n < 1 || n > LOTTO_MAX)) {
+            console.warn('fetchAllBingoAsNumChosen: 유효하지 않은 행 스킵', r);
+            continue;
+          }
           out.push([r.seq, r.no1, r.no2, r.no3, r.no4, r.no5, r.no6, (r.no7 ?? 0)]);
         }
 
@@ -195,8 +201,8 @@
 
   /* ===================== 타입 생성 ===================== */
   function makeRangeGroups(N) {
-    const base   = Math.floor(45 / N);
-    const extra  = 45 % N;
+    const base   = Math.floor(LOTTO_MAX / N);
+    const extra  = LOTTO_MAX % N;
     const groups = [];
     let cur      = 1;
 
@@ -215,7 +221,7 @@
     const groups = Array.from({ length: N }, () => {
       return [];
     });
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       groups[(n - 1) % N].push(n);
     }
     return groups;
@@ -225,14 +231,14 @@
     const groups = Array.from({ length: 10 }, () => {
       return [];
     });
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       groups[n % 10].push(n);
     }
     return groups;
   }
 
   function makeSingle45() {
-    return Array.from({ length: 45 }, (_, i) => {
+    return Array.from({ length: LOTTO_MAX }, (_, i) => {
       return [i + 1];
     });
   }
@@ -276,8 +282,8 @@
     // 효과 범위: [start, end] = [(rEnd-1)-W+1, (rEnd-1)]
     const effectiveEnd = rEnd - 1;
     const start        = effectiveEnd - W + 1;
-    const k            = Array(46).fill(0);
-    const lastSeen     = Array(46).fill(null);
+    const k            = Array(LOTTO_MAX + 1).fill(0);
+    const lastSeen     = Array(LOTTO_MAX + 1).fill(null);
 
     for (const row of CLEANED) {
       const [round, n1, n2, n3, n4, n5, n6, bonus] = row;
@@ -286,14 +292,14 @@
       }
       const arr = [n1, n2, n3, n4, n5, n6];
       for (const n of arr) {
-        if (n >= 1 && n <= 45) {
+        if (n >= 1 && n <= LOTTO_MAX) {
           k[n] += 1;
           if (lastSeen[n] === null || lastSeen[n] < round) {
             lastSeen[n] = round;
           }
         }
       }
-      if (Number.isFinite(bonus) && bonus >= 1 && bonus <= 45) {
+      if (Number.isFinite(bonus) && bonus >= 1 && bonus <= LOTTO_MAX) {
         k[bonus] += 0.5;
         if (lastSeen[bonus] === null || lastSeen[bonus] < round) {
           lastSeen[bonus] = round;
@@ -301,8 +307,8 @@
       }
     }
 
-    const recency = Array(46).fill(0);
-    for (let n = 1; n <= 45; n++) {
+    const recency = Array(LOTTO_MAX + 1).fill(0);
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       recency[n] = (lastSeen[n] === null) ? W : (effectiveEnd - lastSeen[n]);
     }
     return { k, recency, range: { start, end: effectiveEnd } };
@@ -313,14 +319,14 @@
     const windowSizes = [8, 15, 30, 60, 90];
     const weights = [0.10, 0.15, 0.35, 0.25, 0.15];
 
-    let K_avg = Array(46).fill(0);
-    let recency_avg = Array(46).fill(0);
+    let K_avg = Array(LOTTO_MAX + 1).fill(0);
+    let recency_avg = Array(LOTTO_MAX + 1).fill(0);
 
     for (let i = 0; i < windowSizes.length; i++) {
       const W = windowSizes[i];
       const { k, recency } = computeIndividualStats(W, rEnd);
       const w = weights[i];
-      for (let n = 1; n <= 45; n++) {
+      for (let n = 1; n <= LOTTO_MAX; n++) {
         K_avg[n] += k[n] * w;
         recency_avg[n] += recency[n] * w;
       }
@@ -402,21 +408,21 @@
 
   /* ===================== 동적 이격 전략 선택 ===================== */
   function calculateGapVariance(windowData) {
-    const freq = Array(46).fill(0);
+    const freq = Array(LOTTO_MAX + 1).fill(0);
     windowData.forEach(d => {
-      if (d.nums) d.nums.forEach(n => { if (n >= 1 && n <= 45) freq[n]++; });
+      if (d.nums) d.nums.forEach(n => { if (n >= 1 && n <= LOTTO_MAX) freq[n]++; });
     });
-    const avg = freq.slice(1).reduce((a, b) => a + b, 0) / 45;
+    const avg = freq.slice(1).reduce((a, b) => a + b, 0) / LOTTO_MAX;
     
     const sr = [];
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       const expected = avg;
       const se = Math.sqrt(expected + 1e-9);
       sr.push((freq[n] - expected) / se);
     }
     
-    const mean = sr.reduce((a, b) => a + b, 0) / 45;
-    const variance = sr.reduce((sum, v) => sum + (v - mean) ** 2, 0) / 45;
+    const mean = sr.reduce((a, b) => a + b, 0) / LOTTO_MAX;
+    const variance = sr.reduce((sum, v) => sum + (v - mean) ** 2, 0) / LOTTO_MAX;
     return variance;
   }
 
@@ -441,15 +447,15 @@
     for (let i = 0; i < dataWithNums.length; i++) {
       const winNums = dataWithNums[i].nums;
       
-      const freq = Array(46).fill(0);
+      const freq = Array(LOTTO_MAX + 1).fill(0);
       for (let j = 0; j < i; j++) {
         dataWithNums[j].nums.forEach(n => freq[n]++);
       }
       if (i < 5) continue;
       
-      const avg = freq.slice(1).reduce((a, b) => a + b, 0) / 45;
+      const avg = freq.slice(1).reduce((a, b) => a + b, 0) / LOTTO_MAX;
       const hot = [], cold = [];
-      for (let n = 1; n <= 45; n++) {
+      for (let n = 1; n <= LOTTO_MAX; n++) {
         if (freq[n] >= avg) hot.push(n);
         else cold.push(n);
       }
@@ -457,14 +463,14 @@
       function generateSet(type) {
         const set = [];
         if (type === 'equal') {
-          const pool = Array.from({ length: 45 }, (_, i) => i + 1);
+          const pool = Array.from({ length: LOTTO_MAX }, (_, i) => i + 1);
           for (let j = pool.length - 1; j > 0; j--) {
             const k = Math.floor(Math.random() * (j + 1));
             [pool[j], pool[k]] = [pool[k], pool[j]];
           }
           set.push(...pool.slice(0, 6));
         } else if (type === 'neutral') {
-          const available = Array.from({ length: 45 }, (_, i) => i + 1);
+          const available = Array.from({ length: LOTTO_MAX }, (_, i) => i + 1);
           for (let s = 0; s < 6; s++) {
             const totalW = available.reduce((a, idx) => a + freq[idx], 0);
             let randVal = Math.random() * totalW;
@@ -515,9 +521,9 @@
     const O = computeObserved(windowSize, r, types);
     const info = computeTypeStats(windowSize, types, O);
     
-    const avg = (windowSize * 6) / 45;
+    const avg = (windowSize * 6) / LOTTO_MAX;
     
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       if (strategy === 'hot') {
         const freq = info.reduce((sum, t) => {
           const idx = t.groups.findIndex(g => g.includes(n));
@@ -546,7 +552,7 @@
     const mapIndex     = {};
 
     for (const t of types) {
-      const idx = Array(46).fill(-1);
+      const idx = Array(LOTTO_MAX + 1).fill(-1);
       t.groups.forEach((grp, gi) => {
         for (const n of grp) {
           idx[n] = gi;
@@ -581,7 +587,7 @@
 
     for (const t of types) {
       const E  = t.groups.map((g) => {
-        return W * 6 * (g.length / 45);
+        return W * 6 * (g.length / LOTTO_MAX);
       });
       const SR = O[t.name].map((o, i) => {
         return (o - E[i]) / Math.sqrt(E[i] + 1e-9);
@@ -625,14 +631,14 @@
 
   /* ===================== 번호 점수 S(n) ===================== */
   function scoreNumbers(W, rEnd, typeInfo, k, recency) {
-    const mu       = W * 6 / 45;
+    const mu       = W * 6 / LOTTO_MAX;
     const deficit  = Array.from({ length: 46 }, (_, n) => {
       return (n === 0 ? 0 : (mu - (k[n] || 0)));
     });
     const deficitZ = zNormalize(deficit.slice(1)); deficitZ.unshift(0);
     const recZ     = zNormalize(recency.slice(1)); recZ.unshift(0);
 
-    const S = Array(46).fill(0);
+    const S = Array(LOTTO_MAX + 1).fill(0);
 
     for (const ti of typeInfo) {
       const alpha = ti.alpha;
@@ -654,7 +660,7 @@
       }
     }
 
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       S[n] += HP.beta1 * deficitZ[n] + HP.beta2 * recZ[n];
     }
     return S;
@@ -663,7 +669,7 @@
   /* ===================== 확률/후보/세트 ===================== */
   function softmaxFromScores(S) {
     const arr = [];
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       arr.push(S[n]);
     }
     const maxV = Math.max(...arr);
@@ -684,8 +690,8 @@
       }
     }
 
-    const P = Array(46).fill(0);
-    for (let n = 1; n <= 45; n++) {
+    const P = Array(LOTTO_MAX + 1).fill(0);
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       P[n] = exps[n - 1] / Z;
     }
     return P;
@@ -693,7 +699,7 @@
 
   function topKFromScores(S, k) {
     const arr = [];
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       arr.push([n, S[n]]);
     }
     arr.sort((a, b) => {
@@ -711,7 +717,7 @@
     const nums    = [];
     const weights = [];
 
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       const w = weightsMap[n] || 0;
       if (w <= 0) {
         continue;
@@ -722,7 +728,7 @@
 
     if (nums.length === 0) {
       const fallback = [];
-      for (let i = 1; i <= 45; i++) {
+      for (let i = 1; i <= LOTTO_MAX; i++) {
         fallback.push(i);
       }
       for (let i = fallback.length - 1; i > 0; i--) {
@@ -787,7 +793,7 @@
         if (sepIdx.has(colIndex)) {
           cells[c].classList.add('col-sep');
         }
-        if (colIndex === 45) {
+        if (colIndex === LOTTO_MAX) {
           cells[c].classList.add('last-col');
         }
       }
@@ -1000,7 +1006,7 @@
   /* ===================== Top-K/패턴 필터 ===================== */
   function topKSetFromScores(S, K) {
     const arr = [];
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       arr.push([n, S[n]]);
     }
     arr.sort((a, b) => {
@@ -1099,17 +1105,19 @@
     for (let s = 0; s < setsCount; s++) {
       let one      = null;
       let attempts = 0;
+      // 세트별 독립 복사본 — 완화 변경이 다음 세트에 영향을 주지 않도록
+      const localFilters = { ...filters };
 
       while (attempts < 500) {
         attempts += 1;
 
-        const local = Array(46).fill(0);
-        for (let n = 1; n <= 45; n++) {
+        const local = Array(LOTTO_MAX + 1).fill(0);
+        for (let n = 1; n <= LOTTO_MAX; n++) {
           local[n] = (dedup && used.has(n)) ? 1e-12 : (P[n] || 0);
         }
         const cand = sampleNoReplace(local, setSize);
 
-        if (passesPatternFilters(cand, filters, ctx)) {
+        if (passesPatternFilters(cand, localFilters, ctx)) {
           one = cand;
           break;
         }
@@ -1117,22 +1125,22 @@
         // 점진적 완화 (난이도 높을 때)
         if (attempts === 250) {
           // Top-K 완화
-          if (filters.topKMode !== 'none') {
-            filters.topKMode = 'none';
+          if (localFilters.topKMode !== 'none') {
+            localFilters.topKMode = 'none';
           }
         } else if (attempts === 350) {
           // 이월 완화
-          filters.rollMin = 0;
-          filters.rollMax = 6;
+          localFilters.rollMin = 0;
+          localFilters.rollMax = 6;
         } else if (attempts === 450) {
           // 연속 완화
-          filters.maxRun = Math.min(6, filters.maxRun + 1);
+          localFilters.maxRun = Math.min(6, localFilters.maxRun + 1);
         }
       }
 
       if (!one) {
-        const local = Array(46).fill(0);
-        for (let n = 1; n <= 45; n++) {
+        const local = Array(LOTTO_MAX + 1).fill(0);
+        for (let n = 1; n <= LOTTO_MAX; n++) {
           local[n] = (dedup && used.has(n)) ? 1e-12 : (P[n] || 0);
         }
         one = sampleNoReplace(local, setSize);
@@ -1159,7 +1167,6 @@
     const W    = clampInt(el.totalRounds.value, 1, 180, 30);
     const rIn  = parseInt(el.applyRound.value || ROUND_MAX, 10);
     const r    = Number.isFinite(rIn) ? clampRound(rIn) : ROUND_MAX;
-    console.log(`[Debug renderAll] raw rIn: ${rIn}, clamped r: ${r}, ROUND_MAX: ${ROUND_MAX}`);
     el.applyRound.value = r;
 
     const k     = clampInt(el.candidateCount.value, 6, 15, 12);
@@ -1241,7 +1248,7 @@
 
     appendLog('미노출 후보 N개 산출 …');
     const low = [];
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       low.push([n, P[n]]);
     }
     low.sort((a, b) => {
@@ -1286,14 +1293,12 @@ html += `
 
 // 2) 필요한 컨텍스트(적용 회차의 당첨/보너스, 후보/미노출 집합)
 const applyRow = findApplyRow(r);
-console.log(`[Debug applyRow] Searching for r: ${r}, Found:`, applyRow);
 let applyNums = [];
 let applyBonus = null;
 if (applyRow && applyRow.length >= 8) {
   applyNums  = applyRow.slice(1, 7);
   applyBonus = applyRow[7];
 }
-console.log(`[Selection] Round: ${r}, applyNums:`, applyNums);
 const nonSet = new Set(nonExpose);
 
 // 당첨번호 Boost: 선택 회차의 당첨번호 확률 2배
@@ -1307,7 +1312,7 @@ if (applyNums.length > 0) {
   // 재정규화
   const sumP = P.slice(1).reduce((a, b) => a + b, 0);
   if (sumP > 0) {
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       P[n] = P[n] / sumP;
     }
   }
@@ -1318,7 +1323,7 @@ const minK = Math.min(...K.slice(1));
 const maxK = Math.max(...K.slice(1));
 
 // 4) 1~45를 “행”으로 렌더
-for (let i = 1; i <= 45; i++) {
+for (let i = 1; i <= LOTTO_MAX; i++) {
   // (a) 번호 칩/행 제목
   const numCell = `<td><span class="lotto-chip ${lottoColorClass(i, 'chip')}">${i}</span></td>`;
 
@@ -1355,87 +1360,6 @@ tableHost.innerHTML = html;
 applyRowSeparators(tableHost);
 enableRowHoverBand(tableHost);    
 
-    // // === 메인 테이블 렌더: 헤더 → 빈도수 → 적용회차 → 후보군 → 미노출 ===
-    // const tableHost = el.table;
-    // tableHost.innerHTML = '';
-    // let html = '<table>';
-
-    // // 0) 번호 헤더
-    // html += '<tr>';
-    // for (let i = 1; i <= 45; i++) {
-    //   html += `<th>${i}</th>`;
-    // }
-    // html += '</tr>';
-
-    // // 1) 빈도수
-    // const minK = Math.min(...K.slice(1));
-    // const maxK = Math.max(...K.slice(1));
-
-    // html += `<tr><td colspan="45" class="section-label">빈도수 (최근 W=${W}, 보너스 0.5)</td></tr>`;
-    // html += '<tr>';
-    // for (let i = 1; i <= 45; i++) {
-    //   const color = getHeat(minK, maxK, K[i]);
-    //   const tip   = `번호 ${i}: 최근 ${W}회 빈도 ${K[i]}`;
-    //   html += `<td style="background:${color};color:#111" title="${tip}">${K[i]}</td>`;
-    // }
-    // html += '</tr>';
-
-    // // 2) 적용회차 추출 (선택 회차 r의 당첨/보너스 그대로 표시)
-    // html += `<tr><td colspan="45" class="section-label">적용회차 추출 (선택 회차 ${r})</td></tr>`;
-    // html += '<tr>';
-    // const applyRow = findApplyRow(r);
-    // let applyNums  = [];
-    // let applyBonus = null;
-
-    // if (applyRow && applyRow.length >= 8) {
-    //   applyNums  = applyRow.slice(1, 7);
-    //   applyBonus = applyRow[7];
-    // }
-
-    // for (let i = 1; i <= 45; i++) {
-    //   let val = 0;
-    //   let cls = '';
-    //   let tip = '적용회차에 선택되지 않음';
-
-    //   if (applyNums.includes(i)) {
-    //     val = 1;
-    //     cls = 'highlight-pink';
-    //     tip = `적용회차 당첨 번호: ${i}`;
-    //   } else if (applyBonus === i) {
-    //     val = 1;
-    //     cls = 'highlight-green';
-    //     tip = `적용회차 보너스 번호: ${i}`;
-    //   }
-    //   html += `<td class="${cls}" title="${tip}">${val}</td>`;
-    // }
-    // html += '</tr>';
-
-    // // 3) 예상 후보군
-    // html += `<tr><td colspan="45" class="section-label">예상 후보군</td></tr>`;
-    // html += '<tr>';
-    // for (let i = 1; i <= 45; i++) {
-    //   const inSet = cand.has(i);
-    //   html += `<td class="${inSet ? 'highlight-purple' : ''}">${inSet ? 1 : 0}</td>`;
-    // }
-    // html += '</tr>';
-
-    // // 4) 예상 미노출
-    // const nonSet = new Set(nonExpose);
-    // html += `<tr><td colspan="45" class="section-label">예상 미노출</td></tr>`;
-    // html += '<tr>';
-    // for (let i = 1; i <= 45; i++) {
-    //   const isNX = nonSet.has(i);
-    //   const tip  = `p(${i})=${(P[i] * 100).toFixed(2)}%`;
-    //   html += `<td class="${isNX ? 'highlight-nonexpose' : ''}" title="${tip}">${isNX ? 1 : 0}</td>`;
-    // }
-    // html += '</tr>';
-
-    // html += '</table>';
-    // tableHost.innerHTML = html;
-
-    // applyColumnSeparators(tableHost);
-    // enableColumnHoverBand(tableHost);
-
     // === 세트 렌더 (5×6) ===
     const setsHost = el.exposureSets;
     setsHost.innerHTML = '';
@@ -1468,11 +1392,11 @@ enableRowHoverBand(tableHost);
 
     // === 2/3/4/5회 추출된 번호 ===
     const allNums = sets.flat();
-    const freq = Array(46).fill(0);
+    const freq = Array(LOTTO_MAX + 1).fill(0);
     allNums.forEach(n => freq[n]++);
 
     const repeated1 = [], repeated2 = [], repeated3 = [], repeated4 = [], repeated5 = [];
-    for (let n = 1; n <= 45; n++) {
+    for (let n = 1; n <= LOTTO_MAX; n++) {
       const cnt = freq[n];
       if (cnt === 5) repeated5.push(n);
       else if (cnt === 4) repeated4.push(n);
@@ -1631,8 +1555,8 @@ function enableRowHoverBand(tableHost) {
             resolve(false);
           };
 
-          document.addEventListener(EVT_READY, onReady, { once: true });
-          document.addEventListener(EVT_ERROR, onError, { once: true });
+          document.addEventListener(EVT_READY, onReady);
+          document.addEventListener(EVT_ERROR, onError);
 
           // 2) 1초 내에 이벤트가 없으면 직접 fetch
           setTimeout(async () => {
@@ -1765,11 +1689,13 @@ function enableRowHoverBand(tableHost) {
     const handle = wrap.querySelector('.rd-resize-handle');
 
     // 저장 높이 복원 (px 단위, max-height 적용)
-    const KEY   = 'ui:realdata:maxh';
-    const saved = parseInt(localStorage.getItem(KEY), 10);
-    if (Number.isFinite(saved) && saved >= 120) {
-      inner.style.maxHeight = saved + 'px';
-    }
+    const KEY = 'ui:realdata:maxh';
+    try {
+      const saved = parseInt(localStorage.getItem(KEY), 10);
+      if (Number.isFinite(saved) && saved >= 120) {
+        inner.style.maxHeight = saved + 'px';
+      }
+    } catch (_) { /* 시크릿 모드 등 localStorage 접근 불가 시 무시 */ }
 
     // 드래그 리사이즈
     let dragging = false;
@@ -1810,7 +1736,9 @@ function enableRowHoverBand(tableHost) {
 
       const nh = parseFloat(getComputedStyle(inner).maxHeight);
       if (Number.isFinite(nh)) {
-        localStorage.setItem(KEY, String(Math.round(nh)));
+        try {
+          localStorage.setItem(KEY, String(Math.round(nh)));
+        } catch (_) { /* 무시 */ }
       }
     };
 
