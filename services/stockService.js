@@ -111,6 +111,44 @@ class StockService {
     }
 
     /**
+     * Calculate directional hit rate for each technique over a walk-forward window
+     * Ref: walk-forward validation / hit rate (stock-prediction-composite-strategies.md)
+     * @param {Array} data - Full OHLCV data array
+     * @param {number} trainingDays - Training window size
+     * @param {number} hitDays - Number of days to test direction accuracy (default 20)
+     * @returns {Object} - {technique: hitRate (0~1)}
+     */
+    async calculateHitRates(data, trainingDays, hitDays = 20) {
+        const hitCount = {};
+        const totalCount = {};
+
+        for (let offset = hitDays; offset >= 1; offset--) {
+            if (data.length < trainingDays + offset + 1) continue;
+
+            const trainData = data.slice(-(trainingDays + offset), -offset);
+            const dayActual = this.calculateActualChange(data, -offset);
+            if (dayActual === 0) continue;
+
+            const { predictions: dayPredictions } = await this.indicatorEngine.runAnalysis(trainData);
+
+            for (const [technique, predicted] of Object.entries(dayPredictions)) {
+                totalCount[technique] = (totalCount[technique] || 0) + 1;
+                if (Math.sign(predicted) === Math.sign(dayActual)) {
+                    hitCount[technique] = (hitCount[technique] || 0) + 1;
+                }
+            }
+        }
+
+        const hitRates = {};
+        for (const technique of Object.keys(totalCount)) {
+            hitRates[technique] = totalCount[technique] > 0
+                ? (hitCount[technique] || 0) / totalCount[technique]
+                : 0.5;
+        }
+        return hitRates;
+    }
+
+    /**
      * Run prediction for a single stock
      * @param {string} ticker - Stock ticker
      * @param {number} trainingDays - Days for training (default 240)
@@ -163,24 +201,30 @@ class StockService {
             .filter(([, sim]) => sim >= threshold)
             .map(([technique]) => technique);
 
-        // Rank techniques
+        // Walk-forward hit rate over 20 days (directional accuracy per technique)
+        // weight = similarity × (0.5 + 0.5 × hitRate) — combines magnitude + direction reliability
+        const hitRates = await this.calculateHitRates(data, trainingDays, 20);
+
+        // Rank techniques by similarity
         const ranked = this.rankTechniques(similarities);
 
         // Predict next day using passed techniques
         const { predictions: nextPredictions } = await this.indicatorEngine.runAnalysis(fullData);
-        
+
         const finalPredictions = {};
         for (const technique of passed) {
             finalPredictions[technique] = nextPredictions[technique] || 0;
         }
 
-        // Calculate final prediction (weighted average by similarity score)
+        // Calculate final prediction (weighted by similarity × hit rate)
         let nextDayPrediction = 0;
         if (Object.keys(finalPredictions).length > 0) {
             let weightedSum = 0;
             let weightSum = 0;
             for (const technique of Object.keys(finalPredictions)) {
-                const weight = similarities[technique] || 0;
+                const sim = similarities[technique] || 0;
+                const hitRate = hitRates[technique] !== undefined ? hitRates[technique] : 0.5;
+                const weight = sim * (0.5 + 0.5 * hitRate);
                 weightedSum += finalPredictions[technique] * weight;
                 weightSum += weight;
             }
@@ -204,6 +248,7 @@ class StockService {
             ranked_techniques: ranked,
             best_technique: ranked[0] ? ranked[0][0] : null,
             best_similarity: ranked[0] ? ranked[0][1] : 0,
+            hit_rates: hitRates,
             next_day_prediction: nextDayPrediction,
             prediction_direction: nextDayPrediction > 0 ? 'UP' : nextDayPrediction < 0 ? 'DOWN' : 'FLAT'
         };
