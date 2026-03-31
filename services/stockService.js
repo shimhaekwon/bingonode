@@ -7,20 +7,7 @@
 
 const StockFetcher = require('@libs/stockFetcher');
 const IndicatorEngine = require('@libs/indicators');
-
-// Korean stock list (same as fetcher)
-const KOREAN_STOCKS = [
-    { ticker: "005930.KS", name: "Samsung Electronics" },
-    { ticker: "000660.KS", name: "SK Hynix" },
-    { ticker: "035420.KS", name: "NAVER" },
-    { ticker: "051910.KS", name: "LG Energy Solution" },
-    { ticker: "006400.KS", name: "Samsung SDI" },
-    { ticker: "005490.KS", name: "POSCO Holdings" },
-    { ticker: "035720.KS", name: "Kakao" },
-    { ticker: "012330.KS", name: "Hyundai Mobis" },
-    { ticker: "000270.KS", name: "Kia" },
-    { ticker: "068270.KS", name: "Celltrion" },
-];
+const KOREAN_STOCKS = require('@config/stocks');
 
 class StockService {
     constructor() {
@@ -135,21 +122,46 @@ class StockService {
         const data = await this.fetcher.fetch(ticker, 400);
         
         if (!data || data.length < trainingDays + 10) {
-            return { error: 'Insufficient data', ticker };
+            return { success: false, error: 'Insufficient data', ticker };
         }
 
-        // Split data: training (last N days excluding last day) and test (last day)
-        const trainData = data.slice(-(trainingDays + 1), -1);
+        // Full data for final next-day prediction
         const fullData = data;
 
-        // Get actual change for last day
-        const actualChange = this.calculateActualChange(data, -1);
+        // Multi-day validation: average similarity over last VALIDATION_DAYS days
+        // Reduces single-sample noise (ref: walk-forward validation approach)
+        const VALIDATION_DAYS = 5;
+        const similarityAccum = {};
+        let actualChange = 0;
 
-        // Run analysis on training data
+        for (let offset = VALIDATION_DAYS; offset >= 1; offset--) {
+            // trainData excludes the day being validated
+            const trainData = data.slice(-(trainingDays + offset), -offset);
+            const dayActual = this.calculateActualChange(data, -offset);
+            const { predictions: dayPredictions } = await this.indicatorEngine.runAnalysis(trainData);
+
+            for (const [technique, predicted] of Object.entries(dayPredictions)) {
+                const sim = this.calculateSimilarity(predicted, dayActual);
+                similarityAccum[technique] = (similarityAccum[technique] || 0) + sim;
+            }
+
+            if (offset === 1) actualChange = dayActual; // keep last day's actual for display
+        }
+
+        // Average similarities across VALIDATION_DAYS
+        const similarities = {};
+        for (const [technique, total] of Object.entries(similarityAccum)) {
+            similarities[technique] = total / VALIDATION_DAYS;
+        }
+
+        // Run analysis on training window (excludes last day) for predictions reference
+        const trainData = data.slice(-(trainingDays + 1), -1);
         const { predictions } = await this.indicatorEngine.runAnalysis(trainData);
 
-        // Validate predictions against actual
-        const { similarities, passed } = this.validate(predictions, actualChange, threshold);
+        // Filter passed techniques by averaged similarity threshold
+        const passed = Object.entries(similarities)
+            .filter(([, sim]) => sim >= threshold)
+            .map(([technique]) => technique);
 
         // Rank techniques
         const ranked = this.rankTechniques(similarities);
@@ -162,11 +174,17 @@ class StockService {
             finalPredictions[technique] = nextPredictions[technique] || 0;
         }
 
-        // Calculate final prediction (average)
+        // Calculate final prediction (weighted average by similarity score)
         let nextDayPrediction = 0;
         if (Object.keys(finalPredictions).length > 0) {
-            const values = Object.values(finalPredictions);
-            nextDayPrediction = values.reduce((a, b) => a + b, 0) / values.length;
+            let weightedSum = 0;
+            let weightSum = 0;
+            for (const technique of Object.keys(finalPredictions)) {
+                const weight = similarities[technique] || 0;
+                weightedSum += finalPredictions[technique] * weight;
+                weightSum += weight;
+            }
+            nextDayPrediction = weightSum > 0 ? weightedSum / weightSum : 0;
         }
 
         // Get stock name
@@ -198,23 +216,19 @@ class StockService {
      * @returns {Array} Array of prediction results
      */
     async predictAll(trainingDays = 240, threshold = 0.5) {
-        const results = [];
+        const settled = await Promise.allSettled(
+            KOREAN_STOCKS.map(stock => this.predict(stock.ticker, trainingDays, threshold))
+        );
 
-        for (const stock of KOREAN_STOCKS) {
-            try {
-                const result = await this.predict(stock.ticker, trainingDays, threshold);
-                results.push(result);
-            } catch (error) {
-                results.push({
-                    ticker: stock.ticker,
-                    name: stock.name,
-                    error: error.message,
-                    success: false
-                });
-            }
-        }
-
-        return results;
+        return settled.map((result, i) => {
+            if (result.status === 'fulfilled') return result.value;
+            return {
+                ticker: KOREAN_STOCKS[i].ticker,
+                name: KOREAN_STOCKS[i].name,
+                error: result.reason?.message || 'Unknown error',
+                success: false
+            };
+        });
     }
 }
 

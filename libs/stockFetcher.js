@@ -6,24 +6,13 @@
  */
 
 const YahooFinance = require('yahoo-finance2').default;
+const KOREAN_STOCKS = require('@config/stocks');
 
-// Korean stock tickers (same as Python version)
-const KOREAN_STOCKS = [
-    { ticker: "005930.KS", name: "Samsung Electronics" },
-    { ticker: "000660.KS", name: "SK Hynix" },
-    { ticker: "035420.KS", name: "NAVER" },
-    { ticker: "051910.KS", name: "LG Energy Solution" },
-    { ticker: "006400.KS", name: "Samsung SDI" },
-    { ticker: "005490.KS", name: "POSCO Holdings" },
-    { ticker: "035720.KS", name: "Kakao" },
-    { ticker: "012330.KS", name: "Hyundai Mobis" },
-    { ticker: "000270.KS", name: "Kia" },
-    { ticker: "068270.KS", name: "Celltrion" },
-];
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 class StockFetcher {
     constructor() {
-        this.cache = {};
+        this.cache = {}; // { ticker_days: { data, expireAt } }
         // Suppress the deprecation notice for historical()
         this.yf = new YahooFinance({ suppressNotices: ['ripHistorical'] });
     }
@@ -43,6 +32,12 @@ class StockFetcher {
      * @returns {Promise<Array|null>} Array of OHLCV objects or null on error
      */
     async fetch(ticker, periodDays = 400) {
+        const cacheKey = `${ticker}_${periodDays}`;
+        const cached = this.cache[cacheKey];
+        if (cached && cached.expireAt > Date.now()) {
+            return cached.data;
+        }
+
         try {
             const endDate = new Date();
             const startDate = new Date();
@@ -73,6 +68,7 @@ class StockFetcher {
                     volume: row.volume
                 }));
 
+            this.cache[cacheKey] = { data, expireAt: Date.now() + CACHE_TTL_MS };
             return data;
         } catch (error) {
             console.error(`[ERROR] Failed to fetch ${ticker}:`, error.message);
@@ -91,13 +87,16 @@ class StockFetcher {
             tickers = KOREAN_STOCKS.map(s => s.ticker);
         }
 
+        const settled = await Promise.allSettled(
+            tickers.map(ticker => this.fetch(ticker, periodDays))
+        );
+
         const results = {};
-        for (const ticker of tickers) {
-            const data = await this.fetch(ticker, periodDays);
-            if (data) {
-                results[ticker] = data;
+        settled.forEach((result, i) => {
+            if (result.status === 'fulfilled' && result.value) {
+                results[tickers[i]] = result.value;
             }
-        }
+        });
         return results;
     }
 }
