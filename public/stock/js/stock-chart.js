@@ -49,7 +49,7 @@ class ChartJsStrategy extends StockChartStrategy {
 
     update(data) {
         if (!this.chart || !data || data.length === 0) return;
-        const displayData = data.slice(-60);
+        const displayData = data; // Show all data (supports D/W/M/Y timeframes)
         const labels = displayData.map(d => d.date);
         const colors = displayData.map(d => d.close >= d.open ? 'rgba(239, 68, 68, 0.7)' : 'rgba(59, 130, 246, 0.7)');
 

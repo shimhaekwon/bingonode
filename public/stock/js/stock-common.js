@@ -104,7 +104,7 @@ function renderResults(results) {
         }
 
         return `
-            <tr class="hover cursor-pointer" data-ticker="${result.ticker}">
+            <tr class="hover cursor-pointer" data-ticker="${result.ticker}" onclick="window.StockCommon.showChart('${result.ticker}')">
                 <td>${result.ticker}</td>
                 <td>${result.name || result.ticker}</td>
                 <td>${result.last_date}</td>
@@ -183,6 +183,44 @@ async function predictAll() {
 // Modal & Details
 let chartInstance = null;
 
+// Highlight active timeframe button
+function setActiveTimeframe(period) {
+    ['D', 'W', 'M', 'Y'].forEach(p => {
+        const btn = document.getElementById(`tf-${p}`);
+        if (!btn) return;
+        btn.className = p === period ? 'btn btn-xs btn-primary' : 'btn btn-xs btn-outline';
+    });
+}
+
+// Show inline chart card for a ticker (days default = 365 / 일)
+async function showChart(ticker, days = 365) {
+    const chartCard = document.getElementById('chartCard');
+    if (!chartCard) return;
+
+    chartCard.classList.remove('hidden');
+    chartCard.dataset.ticker = ticker;
+
+    const stock = stockList.find(s => s.ticker === ticker);
+    const titleEl = document.getElementById('chartTitle');
+    if (titleEl) titleEl.textContent = stock?.name || ticker;
+
+    setActiveTimeframe('D');
+
+    showLoading();
+    try {
+        const stockData = await fetchStockData(ticker, days);
+        if (stockData.length > 0) {
+            if (chartInstance) chartInstance.destroy();
+            if (typeof window.initChart === 'function') {
+                chartInstance = window.initChart();
+            }
+            if (chartInstance) chartInstance.update(stockData);
+        }
+    } finally {
+        hideLoading();
+    }
+}
+
 async function showDetail(ticker) {
     const modal = document.getElementById('detailModal');
     if (!modal) return;
@@ -200,7 +238,6 @@ async function showDetail(ticker) {
             lastPredictResults[ticker] = result;
         }
 
-        const stockData = await fetchStockData(ticker, 365);
         const stock = stockList.find(s => s.ticker === ticker);
         const modalTitle = document.getElementById('modalTitle');
         modalTitle.textContent = stock?.name || ticker;
@@ -241,22 +278,6 @@ async function showDetail(ticker) {
 
         modal.showModal();
 
-        setTimeout(async () => {
-            if (stockData.length > 0) {
-                if (chartInstance) {
-                    chartInstance.destroy();
-                }
-                
-                if (typeof window.initChart === 'function') {
-                    chartInstance = window.initChart();
-                }
-                
-                if (chartInstance) {
-                    chartInstance.update(stockData);
-                }
-            }
-        }, 200);
-
     } catch (error) {
         alert('Error: ' + error.message);
     } finally {
@@ -264,21 +285,19 @@ async function showDetail(ticker) {
     }
 }
 
-// Timeframe: D = daily 365 days, W = weekly 2 years, M = monthly 5 years
+// Timeframe: D=365일, W=730일(2년), M=1825일(5년), Y=3650일(10년)
 async function changeTimeframe(period) {
     if (!chartInstance) return;
-    const modal = document.getElementById('detailModal');
-    if (!modal || !modal.open) return;
-
-    const title = document.getElementById('modalTitle');
-    const ticker = title ? title.dataset.ticker : null;
+    const chartCard = document.getElementById('chartCard');
+    const ticker = chartCard?.dataset.ticker;
     if (!ticker) return;
 
-    const daysMap = { D: 365, W: 730, M: 1825 };
+    const daysMap = { D: 365, W: 730, M: 1825, Y: 3650 };
     const days = daysMap[period] || 365;
 
-    // Invalidate cache for this ticker to force fresh fetch
+    // Invalidate cache to force fresh fetch with new period
     delete stockDataCache[ticker];
+    setActiveTimeframe(period);
 
     showLoading();
     try {
@@ -292,12 +311,9 @@ async function changeTimeframe(period) {
 }
 
 function closeDetailModal() {
-    if (chartInstance) {
-        chartInstance.destroy();
-        chartInstance = null;
-    }
     const modal = document.getElementById('detailModal');
     if (modal) modal.close();
+    // Note: chartInstance is for inline chart — do not destroy on modal close
 }
 
 // Export for global use
@@ -315,8 +331,10 @@ window.StockCommon = {
     predictStock,
     predictAll,
     showDetail,
+    showChart,
     closeDetailModal,
     changeTimeframe,
+    setActiveTimeframe,
     fetchStockData
 };
 

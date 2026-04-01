@@ -48,6 +48,22 @@
             </div>
         </div>
 
+        <!-- Stock Chart (inline, initially hidden) -->
+        <div class="card bg-base-100 shadow-xl mb-6 hidden" id="chartCard">
+            <div class="card-body">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="card-title" id="chartTitle">-</h2>
+                    <div class="flex gap-1">
+                        <button class="btn btn-xs btn-primary" id="tf-D" onclick="changeTimeframe('D')">일</button>
+                        <button class="btn btn-xs btn-outline" id="tf-W" onclick="changeTimeframe('W')">주</button>
+                        <button class="btn btn-xs btn-outline" id="tf-M" onclick="changeTimeframe('M')">월</button>
+                        <button class="btn btn-xs btn-outline" id="tf-Y" onclick="changeTimeframe('Y')">년</button>
+                    </div>
+                </div>
+                <div id="inline-chart-container" style="height: 420px; width: 100%;"></div>
+            </div>
+        </div>
+
         <!-- Results -->
         <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
@@ -80,17 +96,7 @@
         <dialog id="detailModal" class="modal">
             <div class="modal-box max-w-4xl w-11/12 max-w-5xl">
                 <h3 class="font-bold text-lg mb-4" id="modalTitle">Stock Details</h3>
-                
-                <!-- Chart Container -->
-                <div id="chart-container" class="mb-4"></div>
-                
-                <!-- Timeframe Buttons -->
-                <div class="flex gap-2 mb-4">
-                    <button class="btn btn-xs btn-outline" onclick="changeTimeframe('D')">일</button>
-                    <button class="btn btn-xs btn-outline" onclick="changeTimeframe('W')">주</button>
-                    <button class="btn btn-xs btn-outline" onclick="changeTimeframe('M')">월</button>
-                </div>
-                
+
                 <div id="modalContent">
                     <!-- Details will be loaded here -->
                 </div>
@@ -122,10 +128,10 @@
     
     <!-- Page Specific Script -->
     <script>
-        // Chart initialization for this page (Chart.js)
+        // Chart initialization for this page (Chart.js, inline chart container)
         function initChart() {
             console.log('🟢 [initChart] Initializing Chart.js');
-            const chart = createChart('chart-container', 'chartjs', { height: 350 });
+            const chart = createChart('inline-chart-container', 'chartjs', { height: 420 });
             chart.init();
             return chart;
         }
@@ -151,6 +157,7 @@
         // Prediction functions - wrapper for StockCommon
         async function predictStock(ticker) {
             await window.StockCommon.predictStock(ticker);
+            await window.StockCommon.showChart(ticker);
         }
 
         async function predictAll() {
