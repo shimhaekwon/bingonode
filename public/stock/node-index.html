@@ -7,17 +7,14 @@
     <title>Stock Prediction - Hope Stock [Node.js]</title>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.3/dist/full.css" rel="stylesheet" type="text/css" />
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2/dist/tailwind.min.css" rel="stylesheet" type="text/css" />
-    <!-- Chart.js instead of Lightweight Charts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- LightweightCharts (TradingView) -->
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         .loading { opacity: 0.5; pointer-events: none; }
-        .up { color: #ef4444; }
+        .up   { color: #ef4444; }
         .down { color: #3b82f6; }
         .flat { color: #6b7280; }
-        #chart-container {
-            height: 350px;
-            width: 100%;
-        }
+        #inline-chart-container { position: relative; }
     </style>
 </head>
 <body class="bg-base-200 min-h-screen">
@@ -51,16 +48,20 @@
         <!-- Stock Chart (inline, initially hidden) -->
         <div class="card bg-base-100 shadow-xl mb-6 hidden" id="chartCard">
             <div class="card-body">
+                <!-- 차트 헤더: 종목명 / 타임프레임 버튼 / Linear·Log 전환 -->
                 <div class="flex justify-between items-center mb-2">
                     <h2 class="card-title" id="chartTitle">-</h2>
-                    <div class="flex gap-1">
-                        <button class="btn btn-xs btn-primary" id="tf-D" onclick="changeTimeframe('D')">일</button>
-                        <button class="btn btn-xs btn-outline" id="tf-W" onclick="changeTimeframe('W')">주</button>
-                        <button class="btn btn-xs btn-outline" id="tf-M" onclick="changeTimeframe('M')">월</button>
-                        <button class="btn btn-xs btn-outline" id="tf-Y" onclick="changeTimeframe('Y')">년</button>
+                    <div class="flex gap-1 items-center">
+                        <button class="btn btn-xs btn-primary"  id="tf-D" onclick="changeTimeframe('D')">일</button>
+                        <button class="btn btn-xs btn-outline"  id="tf-W" onclick="changeTimeframe('W')">주</button>
+                        <button class="btn btn-xs btn-outline"  id="tf-M" onclick="changeTimeframe('M')">월</button>
+                        <button class="btn btn-xs btn-outline"  id="tf-Y" onclick="changeTimeframe('Y')">년</button>
+                        <div class="divider divider-horizontal mx-1 h-4"></div>
+                        <button class="btn btn-xs btn-outline" id="scaleToggle" onclick="toggleChartScale()">Linear</button>
                     </div>
                 </div>
-                <div id="inline-chart-container" style="height: 420px; width: 100%;"></div>
+                <!-- 차트 컨테이너 -->
+                <div id="inline-chart-container" style="height: 480px; width: 100%;"></div>
             </div>
         </div>
 
@@ -96,10 +97,7 @@
         <dialog id="detailModal" class="modal">
             <div class="modal-box max-w-4xl w-11/12 max-w-5xl">
                 <h3 class="font-bold text-lg mb-4" id="modalTitle">Stock Details</h3>
-
-                <div id="modalContent">
-                    <!-- Details will be loaded here -->
-                </div>
+                <div id="modalContent"></div>
                 <div class="modal-action">
                     <button class="btn" onclick="closeDetailModal()">Close</button>
                 </div>
@@ -120,41 +118,41 @@
 
     <!-- Common Libraries -->
     <script>
-        // Set API Base before loading common.js
         window.API_BASE = '/api/stock2';
     </script>
     <script src="js/stock-common.js"></script>
     <script src="js/stock-chart.js"></script>
-    
+
     <!-- Page Specific Script -->
     <script>
-        // Chart initialization for this page (Chart.js, inline chart container)
+        // NaverStyleStrategy 차트 초기화
         function initChart() {
-            console.log('🟢 [initChart] Initializing Chart.js');
-            const chart = createChart('inline-chart-container', 'chartjs', { height: 420 });
+            const chart = createChart('inline-chart-container', 'naver', { height: 480 });
             chart.init();
             return chart;
         }
 
-        // Use stockList from stock-common.js via window.StockCommon
-        // Render stock buttons
-        function renderStockButtons() {
-            const container = document.getElementById('stockList');
-            if (!container) {
-                console.error('stockList container not found');
-                return;
-            }
-            const stockList = window.StockCommon.stockList;
-            container.innerHTML = stockList.map(stock => 
-                '<button class="btn btn-sm" onclick="predictStock(\'' + stock.ticker + '\')">' + stock.name + '</button>'
-            ).join('');
-            console.log('Stock buttons rendered:', stockList.length);
+        // Linear / Log 전환
+        function toggleChartScale() {
+            const chartInstance = window.StockCommon._chartInstance();
+            if (!chartInstance || typeof chartInstance.toggleScale !== 'function') return;
+            const isLog = chartInstance.toggleScale();
+            const btn = document.getElementById('scaleToggle');
+            if (btn) btn.textContent = isLog ? 'Log' : 'Linear';
         }
 
-        // Initialize page
+        // 주식 버튼 렌더링
+        function renderStockButtons() {
+            const container = document.getElementById('stockList');
+            if (!container) return;
+            const stockList = window.StockCommon.stockList;
+            container.innerHTML = stockList.map(stock =>
+                '<button class="btn btn-sm" onclick="predictStock(\'' + stock.ticker + '\')">' + stock.name + '</button>'
+            ).join('');
+        }
+
         renderStockButtons();
 
-        // Prediction functions - wrapper for StockCommon
         async function predictStock(ticker) {
             await window.StockCommon.predictStock(ticker);
             await window.StockCommon.showChart(ticker);

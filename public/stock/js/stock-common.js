@@ -335,7 +335,8 @@ window.StockCommon = {
     closeDetailModal,
     changeTimeframe,
     setActiveTimeframe,
-    fetchStockData
+    fetchStockData,
+    _chartInstance: () => chartInstance
 };
 
 // Make changeTimeframe globally accessible (called from HTML onclick)
