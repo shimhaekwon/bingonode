@@ -1,4 +1,7 @@
 // routes/stockRouter.js
+// DEPRECATED: Python-based stock prediction router. Replaced by stockRouter2 (Node.js).
+// Keeping for reference only — do not enable without Python scripts/fetcher.py & predictor.py.
+/*
 const express = require('express');
 const router = express.Router();
 
@@ -14,3 +17,4 @@ router.post('/predict', stockController.predict);      // Run prediction
 router.post('/predictAll', stockController.predictAll); // Predict all stocks
 
 module.exports = router;
+*/

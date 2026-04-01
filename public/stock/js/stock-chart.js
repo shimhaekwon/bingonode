@@ -77,6 +77,8 @@ class ChartJsStrategy extends StockChartStrategy {
 }
 
 // Lightweight Charts Strategy
+// NOTE: Used by the deprecated Python stock page (public/stock/index.html).
+// node-index.html uses ChartJsStrategy. Kept for reference.
 class LightweightStrategy extends StockChartStrategy {
     init() {
         if (typeof LightweightCharts === 'undefined') return false;
