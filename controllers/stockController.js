@@ -1,4 +1,7 @@
 // controllers/stockController.js
+// DEPRECATED: Python-based stock controller. Replaced by nodeStockController (Node.js).
+// Keeping for reference — requires Python scripts/fetcher.py & predictor.py + SQLite DB.
+/*
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
@@ -378,3 +381,4 @@ exports.predictAll = async (req, res) => {
         console.log(`[${getTimestamp()}] [END] ${methodName}`);
     }
 };
+*/
