@@ -1,360 +1,334 @@
-/* ========= 기본 색/토큰 ========= */
+/* ========= Design System Tokens (design.md) ========= */
 :root {
-  --border: #e5e5e5;
-  --muted: #757575;
-  --bg-header: #fafafa;
-  --text: #111;
-  --bg: #fff;
-  --shadow: 0 1px 2px rgba(0,0,0,.04);
+  --primary: #2665fd;
+  --secondary: #475569;
+  --surface: #0b1326;
+  --on-surface: #dae2fd;
+  --surface-variant: #1a2333;
+  --error: #ffb4ab;
+  --border: rgba(218, 226, 253, 0.1);
+  --muted: #64748b;
+  
+  /* Bingo Highlight Palette (Adapted for Dark Mode) */
+  --pink-bg: rgba(255, 180, 171, 0.2);
+  --pink-fg: #ffb4ab;
+  --purple-bg: rgba(156, 39, 176, 0.2);
+  --purple-fg: #ce93d8;
+  --green-bg: rgba(76, 175, 80, 0.2);
+  --green-fg: #81c784;
+  --nx-bg: rgba(38, 101, 253, 0.2);
+  --nx-fg: #dae2fd;
 
-  /* 미노출/하이라이트 팔레트 */
-  --pink-bg: #ffe2f1;  --pink-fg: #b0003a;
-  --purple-bg: #efe2ff;--purple-fg: #4a148c;
-  --green-bg: #e2ffe9; --green-fg: #1b5e20;
-  --nx-bg: #eef2ff;    --nx-fg: #1e3a8a;
-
-  /* 실데이터 스크롤 높이 튜닝 */
-  --dv-row-h: 32px;   /* 데이터 행 높이 */
-  --dv-head-h: 36px;  /* 헤더 높이 */
+  /* Layout Constants */
+  --dv-row-h: 32px;
+  --dv-head-h: 36px;
 }
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
+
 body {
-  margin: 0; color: var(--text); background: var(--bg);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', sans-serif;
+  margin: 0;
+  background-color: var(--surface);
+  color: var(--on-surface);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
+  font-size: 14px;
 }
 
-/* ========= 헤더 ========= */
+/* ========= Header ========= */
 .app-header {
-  position: sticky; top: 0; z-index: 10;
-  background: var(--bg); border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--surface-variant);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
 }
-.app-header h1 { margin: 12px 16px; font-size: clamp(18px, 2vw, 22px); }
 
-/* ========= 상단 2분할 레이아웃 ========= */
+.app-header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--on-surface);
+}
+
+/* ========= Split Layout ========= */
 .split {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: 16px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  background: #fff;
+  padding: 16px;
+  background-color: var(--surface);
 }
-.muted { color: var(--muted); }
 
-/* ========= 실데이터(Data.js) 뷰어 ========= */
-.data-viewer {
-  background:#fff; border:1px solid var(--border);
-  border-radius:8px; padding:8px 12px;
-  position: relative;
+/* ========= Containers (Cards) ========= */
+.data-viewer, .sets, .controls, .summary, .table-wrap, .progress {
+  background-color: var(--surface-variant);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
 }
-.data-viewer-header {
-  display:flex; align-items:center; justify-content:space-between;
-  margin-bottom:6px;
+
+/* ========= Data Viewer ========= */
+.data-viewer-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--on-surface);
 }
+
+.muted { color: var(--muted); font-size: 12px; }
+
 #dataViewerInner {
-  /* 핸들 추가에 맞춰 max-height 조정 */
+  margin-top: 12px;
   max-height: calc(var(--dv-head-h) + (var(--dv-row-h) * 10));
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #fff;
-  box-shadow: var(--shadow);
+  border-radius: 8px;
+  background-color: var(--surface);
 }
 
-/* 리사이즈 핸들 */
-.rd-resize-handle {
-  position: absolute;
-  left: 12px; right: 12px; bottom: 8px;
-  height: 6px;
-  cursor: row-resize;
-  border-radius: 3px;
-  background: transparent;
-  z-index: 5;
-}
-.rd-resize-handle:hover { background: rgba(0,0,0,.08); }
-.rd-resize-handle::after {
-  content: '';
-  position: absolute;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  width: 40px; height: 4px;
-  background: #ddd;
-  border-radius: 2px;
-}
-
-/* 표 기본 */
 .data-viewer table {
-  border-collapse: collapse; width: 100%; table-layout: fixed;
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
 }
+
 .data-viewer th, .data-viewer td {
   border: 1px solid var(--border);
   text-align: center;
   height: var(--dv-row-h);
   line-height: var(--dv-row-h);
   padding: 0 6px;
-  font-size: 13px;
+  font-size: 12px;
 }
-.data-viewer .col-radio { width: 42px; }
 
-/* 스크롤 시 헤더 고정(sticky) */
 #dataViewerInner thead th {
-  position: sticky; top: 0; z-index: 2;
-  background: #fff; /* 덮어쓰기 */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: var(--surface-variant);
+  color: var(--secondary);
+  text-transform: uppercase;
+  font-weight: 600;
 }
 
-/* 행 hover/선택 표시 */
-.data-viewer tbody tr { cursor: pointer; }
-.data-viewer tbody tr:hover { background: #fffde7; }  /* 옅은 노랑 */
-.data-viewer .sel { outline: 2px solid #1976d2; }
+.data-viewer tbody tr:hover { background-color: rgba(38, 101, 253, 0.1); }
+.data-viewer .sel { outline: 2px solid var(--primary); outline-offset: -2px; }
 
-/* ========= Type 미리보기(우측) ========= */
-.type-preview .type-preview-bar {
-  display: flex; align-items: center; gap: 12px;
-  padding-bottom: 8px; border-bottom: 1px solid var(--border);
-}
-.type-panel { padding-top: 8px; }
-.type-panel .type-card { border:1px solid var(--border); border-radius:8px; margin:8px 0; overflow:auto; }
-.type-panel .type-card h3 { margin:0; padding:8px 12px; background:#fff; border-bottom:1px solid var(--border); font-size:15px; }
-.type-panel table { width:100%; border-collapse:collapse; table-layout:fixed; }
-.type-panel th, .type-panel td { border:1px solid var(--border); text-align:center; padding:6px 4px; font-size:13px; }
-
-/* ========= 중단 컨트롤(조건) ========= */
+/* ========= Controls Bar ========= */
 .controls {
   display: grid;
   grid-template-columns: repeat(5, minmax(160px, auto));
-  gap: 12px 16px; align-items: end;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  align-items: end;
+  margin: 0 16px 16px;
 }
-.mid-controls { border-bottom: 1px solid var(--border); background:#fff; }
-.control { display: grid; gap: 6px; font-weight: 700; }
-.control input[type="number"], .control select {
-  width: 100%; padding: 6px 8px;
-  border: 1px solid var(--border); border-radius: 6px;
-  background: #fff; font-weight: 600;
+
+.control {
+  display: grid;
+  gap: 8px;
 }
-.control.fixed { display: grid; gap: 6px; }
+
+.control label, .label {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--secondary);
+}
+
+input[type="number"], select {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--on-surface);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input:focus, select:focus {
+  border-color: var(--primary);
+}
+
 .fixed-chip {
-  display: inline-block; padding: 6px 10px;
-  border: 1px solid var(--border); border-radius: 6px;
-  background: #fafafa; font-weight: 700; min-width: 72px; text-align: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--surface);
+  font-weight: 600;
+  text-align: center;
 }
-.buttons { display:flex; gap:8px; }
-.buttons button {
-  padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
-  background: #fff; cursor: pointer; box-shadow: var(--shadow);
-}
-.buttons button:hover { background: #f6f6f6; }
-.hint { grid-column: 1 / -1; color: var(--muted); }
 
-/* ========= 요약 ========= */
-.summary {
+.buttons { display: flex; gap: 8px; margin-top: 8px; }
+
+button {
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 14px;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  background: #fff;
-  font-variant-numeric: tabular-nums;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  background-color: var(--secondary);
+  color: white;
 }
 
-/* ========= 메인 테이블(분석/예상) ========= */
-.table-wrap { padding: 8px 12px 24px; overflow: auto; }
+button:active { transform: scale(0.98); }
+
+#runBtn {
+  background-color: var(--primary);
+}
+
+button:hover { opacity: 0.9; }
+
+.hint { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+
+/* ========= Main Table & Results ========= */
+.table-wrap { margin: 0 16px 24px; }
+
 table {
   border-collapse: collapse;
   width: 100%;
   table-layout: fixed;
-  box-shadow: var(--shadow);
+  background-color: var(--surface);
 }
+
 th, td {
   border: 1px solid var(--border);
   text-align: center;
-  padding: 6px 4px;
+  padding: 8px 4px;
   font-variant-numeric: tabular-nums;
-  font-size: 14px;
+  font-size: 13px;
 }
+
 th {
-  background: var(--bg-header);
-  position: sticky; top: 0; z-index: 5;
+  background-color: var(--surface-variant);
+  color: var(--secondary);
+  text-transform: uppercase;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
+
 .section-label {
   text-align: left;
-  font-weight: 800;
-  background: #fff;
-  border-bottom: 2px solid var(--border);
+  font-weight: 700;
+  background-color: var(--surface-variant);
+  color: var(--on-surface);
+  padding-left: 12px;
 }
 
-/* 하이라이트 */
-.highlight-pink   { background: var(--pink-bg);   color: var(--pink-fg);   font-weight: 800; }
-.highlight-green  { background: var(--green-bg);  color: var(--green-fg);  font-weight: 800; }
-.highlight-purple { background: var(--purple-bg); color: var(--purple-fg); font-weight: 800; }
-.highlight-nonexpose { background: var(--nx-bg); color: var(--nx-fg); font-weight: 800; }
+/* Highlights */
+.highlight-pink   { background-color: var(--pink-bg);   color: var(--pink-fg);   font-weight: 700; }
+.highlight-green  { background-color: var(--green-bg);  color: var(--green-fg);  font-weight: 700; }
+.highlight-purple { background-color: var(--purple-bg); color: var(--purple-fg); font-weight: 700; }
+.highlight-nonexpose { background-color: var(--nx-bg); color: var(--nx-fg); font-weight: 700; }
 
-/* 열 구분선(5·10·15…) + hover 밴드 */
-th.col-sep, td.col-sep { border-right: 2px solid var(--border); }
-th.last-col, td.last-col { border-right-width: 1px; }
-td.col-hover, th.col-hover {
-  background-image: linear-gradient(
-    transparent 0%,
-    rgba(255, 235, 59, .25) 0%,
-    rgba(255, 235, 59, .25) 100%
-  );
-}
-
-/* ========= 예상 노출 세트 ========= */
-.sets {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  background: #fff;
+/* ========= Lotto Number Chips ========= */
+.lotto-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-}
-.sets .set-line { margin: 6px 0; font-weight: 700; }
-.sets .nums { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-left: 8px; }
-.sets .chip {
-  display: inline-block; padding: 2px 8px;
-  border: 1px solid var(--border); border-radius: 999px;
-  background: #fff; box-shadow: var(--shadow);
-}
-
-/* 당첨번호 매칭 스타일 */
-.sets .chip.match-win {
-  background: #4CAF50 !important;
-  color: #fff !important;
-  border: 2px solid #2E7D32 !important;
-  font-weight: 900;
-  box-shadow: 0 0 6px rgba(76, 175, 80, 0.6);
-}
-
-/* 보너스번호 매칭 스타일 */
-.sets .chip.match-bonus {
-  background: #9C27B0 !important;
-  color: #fff !important;
-  border: 2px solid #7B1FA2 !important;
-  font-weight: 900;
-  box-shadow: 0 0 6px rgba(156, 39, 176, 0.6);
-}
-
-/* 세트별 매칭 통계 */
-.sets .set-stats {
-  margin-left: 8px;
+  min-width: 32px;
+  text-align: center;
   font-size: 12px;
-  color: #616161;
+}
+
+/* Dark Mode Lotto Colors */
+.lotto-yellow { background: #facc15; color: #422006; }
+.lotto-blue   { background: #3b82f6; color: #eff6ff; }
+.lotto-red    { background: #ef4444; color: #fef2f2; }
+.lotto-gray   { background: #94a3b8; color: #f8fafc; }
+.lotto-green  { background: #22c55e; color: #f0fdf4; }
+
+.cell-yellow { background: rgba(250, 204, 21, 0.15); }
+.cell-blue   { background: rgba(59, 130, 246, 0.15); }
+.cell-red    { background: rgba(239, 68, 68, 0.15); }
+.cell-gray   { background: rgba(148, 163, 184, 0.15); }
+.cell-green  { background: rgba(34, 197, 94, 0.15); }
+
+/* ========= Expected Sets ========= */
+.sets .set-line { margin: 8px 0; font-weight: 600; }
+.sets .nums { display: inline-flex; gap: 8px; flex-wrap: wrap; margin-left: 8px; }
+.sets .chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   font-weight: 600;
 }
 
-/* ========= 레전드 & 진행/안내 ========= */
-.legend {
-  padding: 6px 16px 0 16px;
-  color: var(--muted);
-  font-size: 13px;
-  display: flex; gap: 16px; flex-wrap: wrap;
-}
-.legend-item { display: inline-flex; align-items: center; gap: 6px; }
-.legend-vline { display: inline-block; width: 24px; height: 0; border-top: 2px solid var(--border); }
-.legend-hover {
-  display: inline-block; width: 24px; height: 10px;
-  background: linear-gradient(transparent 0%, rgba(255,235,59,.25) 0%, rgba(255,235,59,.25) 100%);
-  outline: 1px dashed rgba(0,0,0,.15);
+.sets .chip.match-win {
+  background-color: #22c55e !important;
+  color: #f0fdf4 !important;
+  border: none;
 }
 
-/* 레전드: 당첨/보너스 매칭 표시 */
-.legend-chip-win {
-  display: inline-block; width: 20px; height: 20px;
-  background: #4CAF50; color: #fff;
-  border-radius: 50%; font-size: 10px; font-weight: bold;
-  text-align: center; line-height: 20px;
+.sets .chip.match-bonus {
+  background-color: #a855f7 !important;
+  color: #faf5ff !important;
+  border: none;
 }
-.legend-chip-bonus {
-  display: inline-block; width: 20px; height: 20px;
-  background: #9C27B0; color: #fff;
-  border-radius: 50%; font-size: 10px; font-weight: bold;
-  text-align: center; line-height: 20px;
-}
+
+/* ========= Progress & Logs ========= */
 .progress {
-  margin: 8px 16px; padding: 8px 12px;
-  border: 1px dashed var(--border); border-radius: 8px;
-  background: #fcfcfc; height: 90px; overflow: auto; font-size: 13px;
+  margin: 0 16px 16px;
+  height: 120px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
 }
-.progress .line{ margin:2px 0; }
-.progress .ok{ color:#0b8043; }
-.progress .warn{ color:#b06000; }
-.progress .err{ color:#b00020; }
 
-/* ========= 푸터 ========= */
+.progress .ok { color: #4ade80; }
+.progress .warn { color: #fbbf24; }
+.progress .err { color: var(--error); }
+
+/* ========= Footer ========= */
 .app-footer {
-  padding: 16px;
-  border-top: 1px solid var(--border);
+  padding: 24px 16px;
+  text-align: center;
   color: var(--muted);
+  font-size: 12px;
 }
 
-/* ========= 반응형 ========= */
-@media (max-width: 1080px){
+/* ========= Responsive ========= */
+@media (max-width: 1080px) {
   .split { grid-template-columns: 1fr; }
 }
-@media (max-width: 780px){
-  .controls { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
-}
-@media (max-width: 520px){
-  .controls { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
-  th, td { padding: 4px 2px; font-size: 13px; }
+
+@media (max-width: 780px) {
+  .controls { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
 }
 
-/* =========================
- * Real Data Height Resizer
- * ========================= */
-.data-viewer { position: relative; }
+@media (max-width: 520px) {
+  .controls { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+  th, td { padding: 4px 2px; font-size: 12px; }
+}
 
+/* ========= Resizer Handle ========= */
 .rd-resize-handle {
   position: absolute;
-  left: 12px; right: 12px; bottom: 8px;
-  height: 6px;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  height: 4px;
   cursor: row-resize;
-  border-radius: 3px;
-  background: transparent;
-  z-index: 5;
-}
-.rd-resize-handle:hover { background: rgba(0,0,0,.08); }
-
-/* ==========================================
- * Lotto 6/45 공식 색상 매핑 (01~45)
- * 01-10: 노랑, 11-20: 파랑, 21-30: 빨강, 31-40: 회색, 41-45: 초록
- * ========================================== */
-
-/* 숫자 칩(세트/요약/표 내부 공통으로 재사용) */
-.lotto-chip {
-  display:inline-block; padding:2px 8px; border-radius:999px;
-  font-weight:800; font-variant-numeric:tabular-nums;
-  border:1px solid var(--border); box-shadow: var(--shadow);
-  min-width: 28px; text-align:center;
+  border-radius: 2px;
+  background-color: var(--border);
+  transition: background-color 0.2s;
 }
 
-/* 배경색 정의 (가독성 보정 포함) */
-.lotto-yellow { background:#FFE082; color:#3e2723; } /* 01-10 */
-.lotto-blue   { background:#90CAF9; color:#0d47a1; } /* 11-20 */
-.lotto-red    { background:#FF8A80; color:#b71c1c; } /* 21-30 */
-.lotto-gray   { background:#ECEFF1; color:#263238; } /* 31-40 */
-.lotto-green  { background:#A5D6A7; color:#1b5e20; } /* 41-45 */
-
-/* 표 셀에 적용할 때는 칩 없이 셀 배경만 칠할 수도 있음 */
-.cell-yellow { background:#FFF3B0; }
-.cell-blue   { background:#BBDEFB; }
-.cell-red    { background:#FFCDD2; }
-.cell-gray   { background:#ECEFF1; }
-.cell-green  { background:#C8E6C9; }
-
-/* 하단으로 이동한 Type 미리보기와 위 표 사이 여백 보강(선택) */
-.type-preview { margin-top: 8px; }
-
-/* 행 구분선(5행 단위) */
-tr.row-sep > td { border-top: 2px solid var(--border); }
-
-/* 행 hover 강조 */
-tr.row-hover > td { background: rgba(255,235,59,.16); }
-
-/* 번호 칩 재사용(이미 .lotto-chip 정의가 있다면 건너뛰기 가능) */
-.lotto-chip { 
-  display:inline-block; padding:2px 8px; border-radius:999px;
-  font-weight:800; font-variant-numeric:tabular-nums;
-  border:1px solid var(--border); box-shadow: var(--shadow);
-  min-width:28px; text-align:center;
-}
+.rd-resize-handle:hover { background-color: var(--primary); }

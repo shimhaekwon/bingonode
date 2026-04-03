@@ -1,36 +1,183 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>계산기</title>
+  <title>Developer Calculator</title>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    form { display: flex; gap: 8px; align-items: center; }
-    .toolbar { margin: 12px 0; }
+    :root {
+      --primary: #2665fd;
+      --secondary: #475569;
+      --surface: #0b1326;
+      --on-surface: #dae2fd;
+      --surface-variant: #1a2333;
+      --error: #ffb4ab;
+      --border: rgba(218, 226, 253, 0.1);
+    }
+
+    body {
+      background-color: var(--surface);
+      color: var(--on-surface);
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 400px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background-color: var(--surface-variant);
+    }
+
+    h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 24px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--on-surface);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+
+    .label {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      color: var(--secondary);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .toolbar {
+      margin-bottom: 20px;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    input, select {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--on-surface);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+    }
+
+    select {
+      width: auto;
+      cursor: pointer;
+    }
+
+    button {
+      font-family: inherit;
+      font-weight: 500;
+      font-size: 14px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    #btnRandom {
+      background-color: var(--secondary);
+      color: white;
+      width: 100%;
+    }
+
+    button[type="submit"] {
+      background-color: var(--primary);
+      color: white;
+      margin-top: 8px;
+    }
+
+    .result-container {
+      margin-top: 24px;
+      padding: 16px;
+      background-color: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .result-label {
+      font-size: 12px;
+      color: var(--secondary);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    #result {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--primary);
+      display: block;
+      min-height: 36px;
+    }
   </style>
 </head>
 <body>
-  <h1>간단 계산기</h1>
+  <div class="container">
+    <h1>Calculator</h1>
 
-  <!-- 랜덤 값 가져오기 버튼 -->
-  <div class="toolbar">
-    <button id="btnRandom" type="button">랜덤 값 받기</button>
-    <!-- 예: 로또 스타일이면 min/max를 바꿔 부를 수 있음 -->
-    <!-- <button id="btnRandomLotto" type="button">1~45 랜덤</button> -->
+    <div class="toolbar">
+      <span class="label">Quick Actions</span>
+      <button id="btnRandom" type="button">Get Random Values</button>
+    </div>
+
+    <form id="calcForm">
+      <span class="label">Operation</span>
+      <div class="input-group">
+        <input id="inputNum1" type="number" name="num1" placeholder="Value 1" required>
+        <select name="op">
+          <option value="+">+</option>
+          <option value="-">-</option>
+          <option value="*">×</option>
+          <option value="/">÷</option>
+        </select>
+        <input id="inputNum2" type="number" name="num2" placeholder="Value 2" required>
+      </div>
+      <button type="submit">Execute Calculation</button>
+    </form>
+
+    <div class="result-container">
+      <div class="result-label">Result</div>
+      <span id="result"></span>
+    </div>
   </div>
-
-  <form id="calcForm">
-    <input id="inputNum1" type="number" name="num1" placeholder="숫자1" required>
-    <select name="op">
-      <option value="+">+</option>
-      <option value="-">-</option>
-      <option value="*">*</option>
-      <option value="/">/</option>
-    </select>
-    <input id="inputNum2" type="number" name="num2" placeholder="숫자2" required>
-    <button type="submit">계산</button>
-  </form>
-
-  <h2>결과: <span id="result"></span></h2>
 
   <script>
     // 계산 수행

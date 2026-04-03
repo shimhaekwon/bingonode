@@ -1409,9 +1409,13 @@ enableRowHoverBand(tableHost);
       const repeatedDiv = document.createElement('div');
       repeatedDiv.className = 'set-line';
       repeatedDiv.style.marginTop = '12px';
-      repeatedDiv.innerHTML = `<b>1회</b>: <span class="nums">${repeated1.map(n =>
-        `<span class="chip">${n}</span>`
-      ).join(' ')}</span>`;
+      repeatedDiv.innerHTML = `<b>1회</b>: <span class="nums">${repeated1.map(n => {
+        let chipClass = 'chip';
+        if (applyNums.includes(n) && applyNums.some(num => num > 0) && r <= ROUND_MAX) {
+          chipClass += ' match-win';
+        }
+        return `<span class="${chipClass}">${n}</span>`;
+      }).join(' ')}</span>`;
       setsHost.appendChild(repeatedDiv);
     }
 
@@ -1419,36 +1423,52 @@ enableRowHoverBand(tableHost);
       const repeatedDiv = document.createElement('div');
       repeatedDiv.className = 'set-line';
       repeatedDiv.style.marginTop = '12px';
-      repeatedDiv.innerHTML = `<b>2회</b>: <span class="nums">${repeated2.map(n =>
-        `<span class="chip">${n}</span>`
-      ).join(' ')}</span>`;
+      repeatedDiv.innerHTML = `<b>2회</b>: <span class="nums">${repeated2.map(n => {
+        let chipClass = 'chip';
+        if (applyNums.includes(n) && applyNums.some(num => num > 0) && r <= ROUND_MAX) {
+          chipClass += ' match-win';
+        }
+        return `<span class="${chipClass}">${n}</span>`;
+      }).join(' ')}</span>`;
       setsHost.appendChild(repeatedDiv);
     }
 
     if (repeated3.length > 0) {
       const repeatedDiv = document.createElement('div');
       repeatedDiv.className = 'set-line';
-      repeatedDiv.innerHTML = `<b>3회</b>: <span class="nums">${repeated3.map(n =>
-        `<span class="chip">${n}</span>`
-      ).join(' ')}</span>`;
+      repeatedDiv.innerHTML = `<b>3회</b>: <span class="nums">${repeated3.map(n => {
+        let chipClass = 'chip';
+        if (applyNums.includes(n) && applyNums.some(num => num > 0) && r <= ROUND_MAX) {
+          chipClass += ' match-win';
+        }
+        return `<span class="${chipClass}">${n}</span>`;
+      }).join(' ')}</span>`;
       setsHost.appendChild(repeatedDiv);
     }
 
     if (repeated4.length > 0) {
       const repeatedDiv = document.createElement('div');
       repeatedDiv.className = 'set-line';
-      repeatedDiv.innerHTML = `<b>4회</b>: <span class="nums">${repeated4.map(n =>
-        `<span class="chip">${n}</span>`
-      ).join(' ')}</span>`;
+      repeatedDiv.innerHTML = `<b>4회</b>: <span class="nums">${repeated4.map(n => {
+        let chipClass = 'chip';
+        if (applyNums.includes(n) && applyNums.some(num => num > 0) && r <= ROUND_MAX) {
+          chipClass += ' match-win';
+        }
+        return `<span class="${chipClass}">${n}</span>`;
+      }).join(' ')}</span>`;
       setsHost.appendChild(repeatedDiv);
     }
 
     if (repeated5.length > 0) {
       const repeatedDiv = document.createElement('div');
       repeatedDiv.className = 'set-line';
-      repeatedDiv.innerHTML = `<b>5회</b>: <span class="nums">${repeated5.map(n =>
-        `<span class="chip">${n}</span>`
-      ).join(' ')}</span>`;
+      repeatedDiv.innerHTML = `<b>5회</b>: <span class="nums">${repeated5.map(n => {
+        let chipClass = 'chip';
+        if (applyNums.includes(n) && applyNums.some(num => num > 0) && r <= ROUND_MAX) {
+          chipClass += ' match-win';
+        }
+        return `<span class="${chipClass}">${n}</span>`;
+      }).join(' ')}</span>`;
       setsHost.appendChild(repeatedDiv);
     }
 

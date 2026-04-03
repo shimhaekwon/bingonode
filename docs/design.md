@@ -24,4 +24,4 @@ Clean lines, low visual noise, high information density.
 ## Do's and Don'ts
 - Do use the primary color sparingly, only for the most important action
 - Don't mix rounded and sharp corners in the same view
-- Do maintain 4:1 contrast ratio for all text
+- Do maintain 4:1 contrast ratio for all text   
