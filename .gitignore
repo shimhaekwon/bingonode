@@ -36,8 +36,19 @@ buildpath.js
 lib/
 
 ### sqlite DB
-\data\stock.db
-/data/stock.db
+data/stock.db
+data/bingo.db
+
+### PPT & Temp Files
+ppt_extract/
+*.zip
+*.bat
+*.ps1
+ppt_content.txt
+app-old.*.js
+
+### Environment
+# .env* (사용자 요청으로 ignore 제외)
 
 
 ### Windows reserved device names (prevent git errors)
