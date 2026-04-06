@@ -1,0 +1,29 @@
+.textarea-custom {
+    min-height: 400px;
+    font-family: monospace;
+}
+
+#previewArea table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+#previewArea th, #previewArea td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+#previewArea th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+#previewArea tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+#previewArea tr:hover {
+    background-color: #f1f1f1;
+}

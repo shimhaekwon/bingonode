@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel to Markdown Table Converter</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.3/dist/full.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2/dist/tailwind.min.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="bg-base-200 p-8">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex items-center mb-8">
+            <button onclick="location.href='/'" class="btn btn-outline btn-sm mr-4">Home</button>
+            <h1 class="text-3xl font-bold">Excel to Markdown Table Converter</h1>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text font-bold">Excel/Spreadsheet Data (Paste here)</span>
+                </label>
+                <textarea id="inputArea" class="textarea textarea-bordered textarea-custom w-full" placeholder="Copy data from Excel and paste here..."></textarea>
+            </div>
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text font-bold">Markdown Table Output</span>
+                </label>
+                <textarea id="outputArea" class="textarea textarea-bordered textarea-custom w-full" readonly placeholder="Markdown output will appear here..."></textarea>
+            </div>
+        </div>
+
+        <div class="flex justify-center gap-4">
+            <button id="convertBtn" class="btn btn-primary btn-lg px-12">Convert</button>
+            <button id="clearBtn" class="btn btn-ghost">Clear</button>
+            <button id="copyBtn" class="btn btn-secondary">Copy to Clipboard</button>
+        </div>
+
+        <div id="previewContainer" class="mt-8 card bg-base-100 shadow-xl hidden">
+            <div class="card-body">
+                <h2 class="card-title">Preview</h2>
+                <div id="previewArea" class="prose max-w-none border p-4 rounded bg-white overflow-x-auto">
+                    <!-- Preview will be rendered here -->
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">How to use</h2>
+                <ol class="list-decimal list-inside space-y-2">
+                    <li>Copy a range of cells from Excel, Google Sheets, or any spreadsheet application.</li>
+                    <li>Paste the data into the left textarea.</li>
+                    <li>Click the <strong>Convert</strong> button.</li>
+                    <li>Copy the Markdown table from the right textarea and use it in your .md files.</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
