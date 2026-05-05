@@ -31,11 +31,25 @@
 
   // 하이퍼파라미터
   const HP = {
-    beta1  : 0.6, // 기본 결손 가중
-    beta2  : 0.3, // 기본 최신성 가중
-    lambda : 0.3, // 그룹 내부 분배 시 최신성 가중
-    tau    : 1.0  // softmax 온도
+    beta1  : 0.6,  // 기본 결손 가중
+    beta2  : 0.3,  // 기본 최신성 가중
+    lambda : 0.3,  // 그룹 내부 분배 시 최신성 가중
+    tau    : 1.0,  // softmax 온도
+    // Mandel 인기도 패널티 가중치 — 사람들이 많이 찍는 번호일수록 점수 차감.
+    // 1등 적중 시 분배되는 동점자 수가 적어져 1인당 수령액(EV) ↑.
+    // 검증: 1222회 데이터에서 인기 분위 Q4가 Q1 대비 동점자 +23.9% (compare_strategies.py)
+    // 0 = 비활성, 0.4~0.6 권장 (너무 크면 빈도 신호를 압도)
+    gamma  : 0.4
   };
+
+  // Mandel 인기도 — 사람들이 자주 찍는 번호 패턴 (생일·7배수·행운수)
+  function mandelPopularity(n) {
+    let score = 1.0;
+    if (n <= 31) score *= 1.5;             // 생일·기념일 편향
+    if (n === 7 || n === 14 || n === 21 || n === 28 || n === 35 || n === 42) score *= 1.3;
+    if (n === 3 || n === 9 || n === 13) score *= 1.15;
+    return score;
+  }
 
   // 로거
   const LOG = {
@@ -663,6 +677,16 @@
     for (let n = 1; n <= LOTTO_MAX; n++) {
       S[n] += HP.beta1 * deficitZ[n] + HP.beta2 * recZ[n];
     }
+
+    // Mandel 인기도 패널티 — gamma>0이면 인기 번호 점수 차감
+    if (HP.gamma > 0) {
+      const popRaw = [];
+      for (let n = 1; n <= LOTTO_MAX; n++) popRaw.push(mandelPopularity(n));
+      const popZ = zNormalize(popRaw); popZ.unshift(0);
+      for (let n = 1; n <= LOTTO_MAX; n++) {
+        S[n] -= HP.gamma * popZ[n];
+      }
+    }
     return S;
   }
 
@@ -1204,7 +1228,7 @@
     const O_preview    = computeObserved(W, r, previewTypes);
     const info_preview = computeTypeStats(W, previewTypes, O_preview);
 
-    appendLog('번호 점수 합성 S(n) 계산 …');
+    appendLog(`번호 점수 합성 S(n) 계산 … (Mandel 인기도 패널티 γ=${HP.gamma})`);
     const S = scoreNumbers(W, r, info_analysis, K, recency);
 
     appendLog('Type별 이격(Gap) 분석 …');

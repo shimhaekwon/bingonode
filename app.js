@@ -51,6 +51,21 @@ app.use('/api/bingo/', bingoRouter);
 // app.use('/api/stock/', stockRouter); // Python stock - deprecated
 app.use('/api/stock2/', stockRouter2);
 
+// [C 패턴] 부팅 시 백그라운드 sync — DB가 비어있거나 누락 회차가 있으면 자동 채움.
+// await 안 함: 서버 시작을 차단하지 않음. 첫 사용자가 빈 DB를 만나면 controller가 폴백.
+(async () => {
+  try {
+    const bingoService = require('@services/bingoService.js');
+    const bingoModel   = require('@models/bingoModel.js');
+    await bingoModel.ensureReady();   // 스키마 보장
+    bingoService.syncLatest()
+      .then((r) => logger.info('[boot] bingo syncLatest done', JSON.stringify(r)))
+      .catch((e) => logger.warn('[boot] bingo syncLatest failed:', e?.message));
+  } catch (e) {
+    logger.warn('[boot] bingo init skipped:', e?.message);
+  }
+})();
+
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
   next(createError(404));

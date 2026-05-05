@@ -72,7 +72,21 @@ const bingoController = {
         });
       }
       const { limit, offset } = parsed.data;
-      const { rows, total } = await bingoModel.getList(limit, offset);
+      let { rows, total } = await bingoModel.getList(limit, offset);
+
+      // [C 패턴] DB가 비어있으면 자동으로 sync 후 재조회.
+      // 첫 페이지(offset=0)에서 결과 0건 + 전체 카운트 0인 경우만 트리거.
+      if ((!rows || rows.length === 0) && offset === 0 && total === 0) {
+        console.log('[bingoController.getList] DB empty → triggering syncLatest()');
+        try {
+          await bingoService.syncLatest();
+          ({ rows, total } = await bingoModel.getList(limit, offset));
+        } catch (syncErr) {
+          console.error('[bingoController.getList] auto-sync failed:', syncErr?.message);
+          // sync 실패 시에도 빈 결과 반환 (원래 동작 유지)
+        }
+      }
+
       return res.json({ rows, total, limit, offset });
     } catch (error) {
       console.error(error);

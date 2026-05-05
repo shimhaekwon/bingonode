@@ -101,33 +101,53 @@ async function retry(fn, { retries = 2, baseDelay = 400 } = {}) {
 }
 
 // ===================== DHL fetchers =====================
+// 1회 추첨일 (2002-12-07 토요일 KST) 기반으로 현재 회차를 추정.
+// dhlottery API는 srchLtEpsd가 실재 회차일 때만 데이터를 반환하므로 합리적 시드 필요.
+function estimateLatestByDate() {
+  const FIRST_DRAW_KST = new Date('2002-12-07T00:00:00+09:00');
+  const weeks = Math.floor((Date.now() - FIRST_DRAW_KST.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  return Math.max(1, weeks + 1);
+}
+
 async function fetchLatestRound_v1(maxeq) {
-  // JSON endpoint
-  const qs = Number.isInteger(maxeq) && maxeq > 0 ? `?srchDir=center&srchLtEpsd=${maxeq}` : '?srchDir=center';
-  const url = 'https://www.dhlottery.co.kr/lt645/selectPstLt645InfoNew.do' + qs;
-  LOG.dbg('fetchLatestRound_v1: GET', url);
-  const started = Date.now();
+  // srchLtEpsd가 빈 값이거나 실재하지 않는 회차이면 API가 빈 list를 반환한다.
+  // ① DB가 알려주는 maxSeq 우선, ② 없으면 날짜 기반 추정값 사용
+  const seedSeq = (Number.isInteger(maxeq) && maxeq > 0)
+    ? maxeq
+    : estimateLatestByDate();
 
-  const res = await axios.get(url, {
-    headers: JSON_HEADERS,
-    timeout: 10_000,
-    validateStatus: (s) => s >= 200 && s < 500,
-    maxRedirects: 3
-  });
+  // 추정이 미래로 어긋나도 응답 list[0].ltEpsd가 실제 latest를 알려주므로 OK.
+  // 추정이 과거로 어긋나면 list[0].ltEpsd가 seedSeq 그대로 → maxSeq 비교에서 자연스레 처리됨.
+  // 어긋남이 더 클 가능성에 대비해 작은 후보군을 시도.
+  const candidates = [seedSeq, seedSeq + 1, seedSeq - 1, seedSeq - 2, seedSeq + 2];
 
-  LOG.dbg('fetchLatestRound_v1: status', res.status, 'elapsed', `${Date.now() - started}ms`);
-  const data = res?.data;
-
-  const latest =
-    data?.data?.list?.[0]?.ltEpsd ??
-    data?.list?.[0]?.ltEpsd ??
-    data?.drwNo ??
-    data?.latest ??
-    null;
-
-  LOG.dbg('fetchLatestRound_v1: parsed latest =', latest);
-  if (!Number.isInteger(latest)) throw new Error('fetchLatestRound_v1: latest not found');
-  return latest;
+  let lastErr = null;
+  for (const seq of candidates) {
+    if (seq < 1) continue;
+    const url = `https://www.dhlottery.co.kr/lt645/selectPstLt645InfoNew.do?srchDir=center&srchLtEpsd=${seq}`;
+    LOG.dbg('fetchLatestRound_v1: GET', url);
+    const started = Date.now();
+    try {
+      const res = await axios.get(url, {
+        headers: JSON_HEADERS,
+        timeout: 10_000,
+        validateStatus: (s) => s >= 200 && s < 500,
+        maxRedirects: 3
+      });
+      LOG.dbg('fetchLatestRound_v1: status', res.status, 'elapsed', `${Date.now() - started}ms`);
+      const list = res?.data?.data?.list || res?.data?.list || [];
+      if (Array.isArray(list) && list.length > 0 && Number.isInteger(list[0]?.ltEpsd)) {
+        const latest = list[0].ltEpsd;
+        LOG.dbg(`fetchLatestRound_v1: seed=${seq} parsed latest=${latest}`);
+        return latest;
+      }
+      LOG.dbg(`fetchLatestRound_v1: seed=${seq} returned empty list, trying next`);
+    } catch (e) {
+      lastErr = e;
+      LOG.warn(`fetchLatestRound_v1: seed=${seq} failed: ${e?.message}`);
+    }
+  }
+  throw lastErr || new Error('fetchLatestRound_v1: no candidate returned data');
 }
 
 async function fetchLatestRound_v2() {
