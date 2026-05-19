@@ -23,14 +23,13 @@ class StockService {
     }
 
     /**
-     * Get stock data for chart display
+     * Get stock candles for chart display by candle interval.
      * @param {string} ticker - Stock ticker
-     * @param {number} days - Number of days to fetch
-     * @returns {Array} OHLCV data array
+     * @param {'D'|'W'|'M'|'Y'} period - 일봉/주봉/월봉/년봉
+     * @returns {Array} OHLCV candle array (oldest-first)
      */
-    async getStockData(ticker, days = 365) {
-        const data = await this.fetcher.fetch(ticker, days);
-        return data;
+    async getStockData(ticker, period = 'D') {
+        return this.fetcher.fetchCandles(ticker, period);
     }
 
     /**

@@ -36,21 +36,24 @@ exports.getStockList = async (req, res) => {
     }
 };
 
-// POST /api/stock2/data - Get stock data for chart
+// POST /api/stock2/data - Get stock candles for chart by interval (D/W/M/Y)
+const VALID_PERIODS = new Set(['D', 'W', 'M', 'Y']);
 exports.getStockData = async (req, res) => {
     const methodName = 'getStockData';
     console.log(`[${getTimestamp()}] [START] ${methodName}`);
     try {
-        const { ticker, days = 365 } = req.body;
+        const { ticker, period } = req.body;
 
         if (!ticker) {
             return res.status(400).json({ success: false, error: 'ticker is required' });
         }
 
-        const data = await stockService.getStockData(ticker, days);
+        const p = VALID_PERIODS.has(period) ? period : 'D';
+        const data = await stockService.getStockData(ticker, p);
 
         res.json({
             success: true,
+            period: p,
             data: data
         });
     } catch (error) {

@@ -129,15 +129,16 @@ function hideLoading() {
     if (el) el.classList.add('hidden');
 }
 
-// Data Fetching
-const stockDataCache = {}; // { ticker: { data, expireAt } }
-async function fetchStockData(ticker, days = 365) {
-    const cached = stockDataCache[ticker];
+// Data Fetching — 캔들 주기별 캐시 (D/W/M/Y 각각 분리)
+const stockDataCache = {}; // { `${ticker}_${period}`: { data, expireAt } }
+async function fetchStockData(ticker, period = 'D') {
+    const key = `${ticker}_${period}`;
+    const cached = stockDataCache[key];
     if (cached && cached.expireAt > Date.now()) return cached.data;
     try {
-        const result = await fetchAPI(`${API_BASE}/data`, { ticker, days });
+        const result = await fetchAPI(`${API_BASE}/data`, { ticker, period });
         if (result.success && result.data) {
-            stockDataCache[ticker] = { data: result.data, expireAt: Date.now() + CACHE_TTL_MS };
+            stockDataCache[key] = { data: result.data, expireAt: Date.now() + CACHE_TTL_MS };
             return result.data;
         }
         return [];
@@ -192,23 +193,24 @@ function setActiveTimeframe(period) {
     });
 }
 
-// Show inline chart card for a ticker (days default = 365 / 일)
-async function showChart(ticker, days = 365) {
+// Show inline chart card for a ticker (default period = 'D' / 일봉)
+async function showChart(ticker, period = 'D') {
     const chartCard = document.getElementById('chartCard');
     if (!chartCard) return;
 
     chartCard.classList.remove('hidden');
     chartCard.dataset.ticker = ticker;
+    chartCard.dataset.period = period;
 
     const stock = stockList.find(s => s.ticker === ticker);
     const titleEl = document.getElementById('chartTitle');
     if (titleEl) titleEl.textContent = stock?.name || ticker;
 
-    setActiveTimeframe('D');
+    setActiveTimeframe(period);
 
     showLoading();
     try {
-        const stockData = await fetchStockData(ticker, days);
+        const stockData = await fetchStockData(ticker, period);
         if (stockData.length > 0) {
             if (chartInstance) chartInstance.destroy();
             if (typeof window.initChart === 'function') {
@@ -285,23 +287,20 @@ async function showDetail(ticker) {
     }
 }
 
-// Timeframe: D=365일, W=730일(2년), M=1825일(5년), Y=3650일(10년)
+// Timeframe: 캔들 주기 (D=일봉, W=주봉, M=월봉, Y=년봉) — 백엔드가 집계 담당.
 async function changeTimeframe(period) {
     if (!chartInstance) return;
     const chartCard = document.getElementById('chartCard');
     const ticker = chartCard?.dataset.ticker;
     if (!ticker) return;
+    if (!['D', 'W', 'M', 'Y'].includes(period)) period = 'D';
 
-    const daysMap = { D: 365, W: 730, M: 1825, Y: 3650 };
-    const days = daysMap[period] || 365;
-
-    // Invalidate cache to force fresh fetch with new period
-    delete stockDataCache[ticker];
+    chartCard.dataset.period = period;
     setActiveTimeframe(period);
 
     showLoading();
     try {
-        const stockData = await fetchStockData(ticker, days);
+        const stockData = await fetchStockData(ticker, period);
         if (stockData.length > 0 && chartInstance) {
             chartInstance.update(stockData);
         }
