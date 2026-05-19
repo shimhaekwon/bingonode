@@ -41,7 +41,7 @@ This document describes the frontend and backend logic for the Node.js‑based s
    - Calls `hideLoading()`.
 6. Detail view (`showDetail`):
    - Shows loading.
-   - Fetches prediction (`/predict`) and, if needed, OHLCV data (`/data` with days=365).
+   - Fetches prediction (`/predict`) and, if needed, OHLCV candles (`/data` with `period='D'` 일봉 기본).
    - Updates modal title, info/prediction panels, and all‑techniques table.
    - Initializes or updates chart via `window.initChart()` (provided by `stock-chart.js`) and feeds chronological data.
    - On modal close, destroys chart instance.
@@ -64,7 +64,7 @@ This document describes the frontend and backend logic for the Node.js‑based s
 - Thin wrapper: validates required fields, delegates to `StockService`, logs timestamps, returns JSON `{success:true, ...}` or error.
 - Endpoints:
   - `getStockList`: returns static Korean stock list.
-  - `getStockData`: proxies to `stockService.getStockData(ticker, days)`.
+  - `getStockData`: validates `period ∈ {D,W,M,Y}` (기본 `D`) → `stockService.getStockData(ticker, period)`. 응답에 `period` echo 포함.
   - `predict`: proxies to `stockService.predict(ticker, trainingDays, threshold)`.
   - `predictAll`: proxies to `stockService.predictAll(trainingDays, threshold)`.
 
@@ -76,7 +76,7 @@ This document describes the frontend and backend logic for the Node.js‑based s
   - `ChartPatternEngine` (`@libs/chartPatterns`) – detects 39 candlestick patterns.
 - Core methods:
   - `getStockList()`: returns hard‑coded KOREAN_STOCKS.
-  - `getStockData(ticker, days)`: delegates to `fetcher.fetch(ticker, days)`.
+  - `getStockData(ticker, period)`: delegates to `fetcher.fetchCandles(ticker, period)` — 캔들 주기(일/주/월/년) 지원. 차트 전용 경로이며 `predict` 는 별도 `fetcher.fetch(ticker, 400)` 사용 (무수정).
   - `calculateActualChange(data, dayOffset=-1)`: % change between close of day and previous day.
   - `calculateSimilarity(predicted, actual)`: similarity score (0–1) based on direction and magnitude.
   - `validate(predictions, actualChange, threshold)`: returns per‑technique similarity and list of passed techniques.
@@ -98,6 +98,12 @@ This document describes the frontend and backend logic for the Node.js‑based s
 #### `libs/stockFetcher.js` — 3-tier 캐시 통합
 2026-05 복원: deprecated controller의 SQLite 영속화 패턴을 active 코드로 통합.
 
+두 종류의 진입점이 있음:
+- **`fetch(ticker, periodDays)`** — 일봉 전용. 아래 3-tier 흐름 그대로. `predict` 와 차트 `D` 가 사용.
+- **`fetchCandles(ticker, period)`** — 캔들 주기 진입 (2026-05-20 신규). `D` 는 `fetch` 재사용, `W/M/Y` 는 Yahoo native interval (`1wk`, `1mo`) 직접 호출 후 인메모리 캐시. `Y` 는 월봉을 받아 서버에서 연 단위 집계. DB 미저장 (daily-only 스키마 유지).
+
+`fetch()` 의 3-tier 흐름:
+
 ```mermaid
 flowchart TD
     A[fetch ticker periodDays] --> B{인메모리<br/>5분 TTL}
@@ -117,7 +123,7 @@ flowchart TD
     J --> Z
 ```
 
-- **Layer 1 (메모리)**: 5분 TTL, `cacheKey = ticker_periodDays`
+- **Layer 1 (메모리)**: 5분 TTL. 일봉 경로는 `cacheKey = ticker_periodDays`, 캔들 주기 경로는 `candles_${ticker}_${period}` — 키 분리되어 충돌 없음.
 - **Layer 2 (SQLite)**: `stock_data` 테이블, `max(date) ≥ 오늘(KST)`이면 fresh
 - **Layer 3 (yfinance)**: `yahoo-finance2`의 `chart()` API 호출
 - **폴백**: yfinance 실패 또는 빈 응답 시 stale DB라도 반환 (외부 장애 면역)
