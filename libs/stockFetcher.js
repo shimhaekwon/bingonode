@@ -12,6 +12,34 @@ const stockModel = require('@models/stockModel.js');
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5분 인메모리 TTL
 
+/**
+ * yfinance row 정규화. 진행 중 기간(부분 월/주봉)은 close 만 채워지고
+ * open/high/low 가 0 으로 오는 경우가 있음. close>0 이고 OHL 중 하나라도 <=0 이면
+ * 4개 모두 close 로 채워(degenerate doji) 다운스트림 집계/마커 계산에서 0 division 방지.
+ * 완전 무효(close 도 0/null) row 는 호출처에서 필터.
+ */
+function normalizeOhlcv(row) {
+    if (!row || !row.date) return null;
+    const c = row.close;
+    if (c == null || !(c > 0)) {
+        // close 자체가 없으면 정규화 불가 — 호출처가 필터링
+        return {
+            date: row.date.toISOString().split('T')[0],
+            open: row.open, high: row.high, low: row.low, close: row.close,
+            volume: row.volume
+        };
+    }
+    let o = row.open, h = row.high, l = row.low;
+    if (!(o > 0) || !(h > 0) || !(l > 0)) {
+        o = c; h = c; l = c;
+    }
+    return {
+        date: row.date.toISOString().split('T')[0],
+        open: o, high: h, low: l, close: c,
+        volume: row.volume || 0
+    };
+}
+
 // 캔들 주기별 Yahoo interval + 조회 기간 (년 단위).
 // Y(년봉)는 Yahoo가 yearly 미지원 → 월봉(1mo)을 받아 서버에서 연 단위 집계.
 const INTERVAL_MAP = {
@@ -62,17 +90,10 @@ class StockFetcher {
             return null;
         }
 
-        // 장 마감 전 당일 row는 close=null이므로 제외
+        // 장 마감 전 당일 row는 close=null 또는 OHL=0 으로 올 수 있음 → 정규화 + 필터
         return result.quotes
-            .filter(row => row.close !== null)
-            .map(row => ({
-                date: row.date.toISOString().split('T')[0],
-                open: row.open,
-                high: row.high,
-                low: row.low,
-                close: row.close,
-                volume: row.volume
-            }));
+            .map(row => normalizeOhlcv(row))
+            .filter(row => row && row.close > 0);
     }
 
     /**
@@ -198,15 +219,8 @@ class StockFetcher {
         });
         if (!result || !result.quotes || result.quotes.length === 0) return [];
         return result.quotes
-            .filter(row => row.close !== null && row.date)
-            .map(row => ({
-                date: row.date.toISOString().split('T')[0],
-                open: row.open,
-                high: row.high,
-                low: row.low,
-                close: row.close,
-                volume: row.volume
-            }));
+            .map(row => normalizeOhlcv(row))
+            .filter(row => row && row.close > 0 && row.date);
     }
 
     // 월봉 → 년봉: 연도별 그룹화. open=첫달 open, close=마지막달 close, high=max, low=min, volume=sum.

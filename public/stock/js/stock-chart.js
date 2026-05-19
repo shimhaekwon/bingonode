@@ -168,26 +168,32 @@ class NaverStyleStrategy extends StockChartStrategy {
             if (data[i].low  < data[lowIdx].low)  lowIdx  = i;
         }
         const lastClose = data[data.length - 1].close;
-        const highPct = ((lastClose - data[highIdx].high) / data[highIdx].high * 100).toFixed(2);
-        const lowPct  = ((lastClose - data[lowIdx].low)  / data[lowIdx].low  * 100).toFixed(2);
         const sign    = v => (v >= 0 ? '+' : '') + v;
+        const markers = [];
 
-        const markers = [
-            {
+        // 표시 방어: 데이터 위생 가드 통과 후에도 만일을 대비한 0/음수/Infinity 차단
+        const highVal = data[highIdx] && data[highIdx].high;
+        if (highVal > 0) {
+            const highPct = ((lastClose - highVal) / highVal * 100).toFixed(2);
+            markers.push({
                 time: data[highIdx].date,
                 position: 'aboveBar',
                 color: '#ef4444',
                 shape: 'arrowDown',
-                text: `최고 ${data[highIdx].high.toLocaleString()} (${sign(highPct)}%)`
-            },
-            {
+                text: `최고 ${highVal.toLocaleString()} (${sign(highPct)}%)`
+            });
+        }
+        const lowVal = data[lowIdx] && data[lowIdx].low;
+        if (lowVal > 0) {
+            const lowPct  = ((lastClose - lowVal) / lowVal * 100).toFixed(2);
+            markers.push({
                 time: data[lowIdx].date,
                 position: 'belowBar',
                 color: '#3b82f6',
                 shape: 'arrowUp',
-                text: `최저 ${data[lowIdx].low.toLocaleString()} (${sign(lowPct)}%)`
-            }
-        ];
+                text: `최저 ${lowVal.toLocaleString()} (${sign(lowPct)}%)`
+            });
+        }
         // LightweightCharts는 markers를 시간 오름차순으로 요구
         return markers.sort((a, b) => (a.time < b.time ? -1 : 1));
     }
