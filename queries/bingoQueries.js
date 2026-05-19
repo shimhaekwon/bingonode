@@ -1,4 +1,4 @@
-export const BingoQueries = {
+const BingoQueries = {
   getList: `
     SELECT seq, no1, no2, no3, no4, no5, no6, no7, created_at
     FROM tb_bingo
@@ -32,9 +32,11 @@ export const BingoQueries = {
     SELECT seq, no1, no2, no3, no4, no5, no6, no7, created_at
     FROM tb_bingo
     ORDER BY seq DESC
-    LIMIT @rounds
+    LIMIT @limit OFFSET @offset
   `
 };
+
+module.exports = { BingoQueries };
 
 
 

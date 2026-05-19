@@ -64,11 +64,13 @@ async function getOne(seq) {
   }
 }
 
-async function getRecent(rounds) {
+async function getRecent(limit = 50, offset = 0) {
   try {
     await ensureReady();
-    const rows = await execAll(BingoQueries.getRecent, [rounds]);
-    return rows;
+    const rows = await execAll(BingoQueries.getRecent, [limit, offset]);
+    const totalResult = await execGet(BingoQueries.getCount, []);
+    const total = totalResult ? totalResult.cnt : 0;
+    return { rows, total };
   } catch (error) {
     LOG.err('getRecent error:', error);
     throw error;
@@ -109,6 +111,35 @@ async function setUpsert(seq, row) {
   }
 }
 
+// 다수 회차를 단일 트랜잭션으로 일괄 upsert. 비-트랜잭션 대비 fsync N→1.
+// stockModel.upsertMany와 동일 패턴. 실패 시 ROLLBACK으로 부분 반영 방지.
+async function setUpsertMany(rows) {
+  try {
+    await ensureReady();
+    if (!Array.isArray(rows) || rows.length === 0) return { written: 0 };
+
+    let written = 0;
+    await execRun('BEGIN TRANSACTION');
+    try {
+      for (const r of rows) {
+        if (!r || !Number.isInteger(r.seq)) continue;
+        const params = [r.seq, r.no1, r.no2, r.no3, r.no4, r.no5, r.no6, r.no7 ?? null];
+        const result = await execRun(BingoQueries.setUpsert, params);
+        if (result.changes > 0) written++;
+      }
+      await execRun('COMMIT');
+    } catch (err) {
+      LOG.err('setUpsertMany rollback:', err && err.message);
+      await execRun('ROLLBACK').catch(() => {});
+      throw err;
+    }
+    return { written };
+  } catch (error) {
+    LOG.err('setUpsertMany error:', error);
+    throw error;
+  }
+}
+
 async function setUpdate(seq, row) {
   try {
     await ensureReady();
@@ -140,6 +171,7 @@ module.exports = {
   getRecent,
   getMaxSeq,
   setUpsert,
+  setUpsertMany,
   setUpdate,
   setDelete,
 };

@@ -427,24 +427,12 @@ async function syncLatest() {
 
       console.time('syncLatest:upserts');
       let ok = 0;
-      for (const detail of results) {
-        try {
-          if (typeof bingoModel.setUpsert === 'function') {
-            if (bingoModel.setUpsert.length >= 2) {
-              await bingoModel.setUpsert(detail.seq, detail);
-            } else {
-              await bingoModel.setUpsert(detail);
-            }
-          } else if (typeof bingoModel.upsertBySeq === 'function') {
-            await bingoModel.upsertBySeq(detail.seq, detail);
-          } else {
-            throw new Error('No upsert function found on model');
-          }
-          ok++;
-          if (DEBUG && ok <= 3) LOG.dbg('syncLatest: upserted', brief(detail));
-        } catch (e) {
-          LOG.err('syncLatest: upsert failed seq=', detail?.seq, e?.message);
-        }
+      try {
+        const { written } = await bingoModel.setUpsertMany(results);
+        ok = written;
+        if (DEBUG) LOG.dbg('syncLatest: setUpsertMany written =', written);
+      } catch (e) {
+        LOG.err('syncLatest: setUpsertMany failed:', e?.message);
       }
       console.timeEnd('syncLatest:upserts');
       LOG.info(`syncLatest: upsert done ok=${ok}/${results.length}`);
@@ -463,15 +451,7 @@ async function syncLatest() {
       try {
         console.time('syncLatest:verify-latest');
         const detail = await retry(() => fetchRoundDetailFromHtml(maxSeq), { retries: 1, baseDelay: 500 });
-        if (typeof bingoModel.setUpsert === 'function') {
-          if (bingoModel.setUpsert.length >= 2) {
-            await bingoModel.setUpsert(detail.seq, detail);
-          } else {
-            await bingoModel.setUpsert(detail);
-          }
-        } else if (typeof bingoModel.upsertBySeq === 'function') {
-          await bingoModel.upsertBySeq(detail.seq, detail);
-        }
+        await bingoModel.setUpsertMany([detail]);
         console.timeEnd('syncLatest:verify-latest');
         LOG.info('syncLatest: verification/upsert done for seq', maxSeq);
       } catch (e) {

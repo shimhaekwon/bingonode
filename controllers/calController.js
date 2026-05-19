@@ -1,4 +1,5 @@
 const util = require('@utils/util.js');
+const logger = require('@utils/logger.js');
 const apiController = {
   getResult: async(req, res) => {
     try {
@@ -28,7 +29,7 @@ const apiController = {
       res.json({ result });
     }
     catch (error) {
-      LOG.err(error);
+      logger.error(error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -60,7 +61,7 @@ const apiController = {
 
     }
     catch (error) {
-      LOG.err(error);
+      logger.error(error);
       res.status(500).json({ error: error.message });
     }
   }
