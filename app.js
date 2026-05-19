@@ -1,3 +1,4 @@
+require('dotenv').config();
 var createError = require('http-errors');
 var express = require('express');
 var path = require('path');
@@ -10,7 +11,6 @@ const logger = require('./utils/logger.js');
 var indexRouter = require('@routes/index');
 var calRouter  = require('@routes/calRouter');
 var bingoRouter = require('@routes/bingoRouter');
-// var stockRouter = require('@routes/stockRouter'); // Python stock - deprecated
 var stockRouter2 = require('@routes/stockRouter2');
 
 var app = express();
@@ -18,9 +18,9 @@ var app = express();
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'njk');
-nunjucks.configure('views', { 
+nunjucks.configure('views', {
   express: app,
-  watch: true,
+  watch: process.env.NODE_ENV !== 'production',
 });
 
 app.use(morgan('dev'));
@@ -31,7 +31,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 function loggingMiddleware(req, res, next) {
   const reqQuery = JSON.stringify(req.query);
-  const reqBody = JSON.stringify(req.body);
+  const rawBody = JSON.stringify(req.body) || '';
+  const reqBody = rawBody.length > 500
+    ? rawBody.slice(0, 500) + `...(${rawBody.length} bytes)`
+    : rawBody;
 
   logger.info(`req.method:[${req.method}]`);
   logger.info(`req.url:[${req.url}]`);
@@ -48,7 +51,6 @@ app.use(loggingMiddleware);
 app.use('/', indexRouter);
 app.use('/api/calc/', calRouter);
 app.use('/api/bingo/', bingoRouter);
-// app.use('/api/stock/', stockRouter); // Python stock - deprecated
 app.use('/api/stock2/', stockRouter2);
 
 // [C 패턴] 부팅 시 백그라운드 sync — DB가 비어있거나 누락 회차가 있으면 자동 채움.
@@ -70,8 +72,6 @@ app.use('/api/stock2/', stockRouter2);
 app.use(function(req, res, next) {
   next(createError(404));
 });
-
-require('dotenv').config();
 
 //const isDev = req.app.get('env') === 'development';
 const isDev = process.env.NODE_ENV === 'development';

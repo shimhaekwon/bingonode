@@ -67,7 +67,7 @@ where:
 - `POST /api/bingo/getOne` → `bingoController.getOne`
 - `POST /api/bingo/getRecent` → `bingoController.getRecent`
 - `POST /api/bingo/sync` → `bingoController.postSync`
-- `POST /api/bingo/getPredict` → `bingoController.getPredict` *(미구현 결함 — `getRecent`/`generatePredictions` 미정의)*
+- ~~`POST /api/bingo/getPredict`~~ → **라우트 비활성화됨** (2026-05-19) — 예측 서비스 `generatePredictions` 미구현. 엔진 구현 후 `bingoRouter.js`에서 재활성화 예정.
 
 ### Controller (`controllers/bingoController.js`)
 - Uses **Zod** for request validation (`insertSchema`, `listSchema`, `seqOnlySchema`).
@@ -79,7 +79,7 @@ where:
   - `getRecent`: similar to `getList` but orders newest first.
   - `setUpsert`: inserts or updates a round.
   - `postSync`: triggers external sync (returns 202 Accepted).
-  - `getPredict`: 현재 결함 상태 (서비스 함수 미구현).
+  - `getPredict`: 라우트 비활성화 상태 (서비스 함수 `generatePredictions` 미구현).
 
 ### Service (`services/bingoService.js`)
 - **`syncLatest()`** — 외부 API에서 누락 회차를 가져와 `setUpsert`로 저장.

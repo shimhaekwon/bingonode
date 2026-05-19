@@ -18,10 +18,6 @@ const BingoQueries = {
     ON CONFLICT(seq) 
     DO UPDATE SET no1=@no1, no2=@no2, no3=@no3, no4=@no4, no5=@no5, no6=@no6, no7=@no7
   `,
-  setCreate: `
-    INSERT INTO tb_bingo (seq, no1, no2, no3, no4, no5, no6, no7)
-    VALUES (@seq, @no1, @no2, @no3, @no4, @no5, @no6, @no7)
-  `,
   setUpdate: `
     UPDATE tb_bingo
     SET no1=@no1, no2=@no2, no3=@no3, no4=@no4, no5=@no5, no6=@no6, no7=@no7
